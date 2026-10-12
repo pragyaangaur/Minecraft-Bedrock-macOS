@@ -4,8 +4,9 @@
 /game/
 *.dmp
 
-# Everything the setup downloads or builds, the Wine prefix and the logs.
+# Everything the setup downloads or builds, the packaged app, the Wine prefix and the logs.
 /build/
+/dist/
 /prefix/
 /out/
 /.venv/
