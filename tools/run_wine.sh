@@ -36,13 +36,14 @@ for d in "$BUILD"/stubs/*.dll(N); do ln -sf "$d" "$run/${d:t}"; done
 [[ -d $system32 ]] || WINEDLLOVERRIDES="mscoree,mshtml=" WINEDEBUG=-all arch -x86_64 $wine wineboot --init > /dev/null 2>&1
 
 # Wine loads builtin DLLs from the copies it put in system32 when the prefix
-# was created, so the patched DLLs are copied there on every start.
-for d in xgameruntime winhttp gameinput mmdevapi ntdll ws2_32; do
+# was created, so the patched and DXMT DLLs are copied there on every start.
+for d in xgameruntime d3d11 dxgi d3d10core winemetal winhttp gameinput mmdevapi ntdll ws2_32; do
   cp "$WINE_DIR/lib/wine/x86_64-windows/$d.dll" "$system32/$d.dll"
 done
 
-# Never start the debugger on a crash, and skip the Mono and Gecko installers.
-export WINEDLLOVERRIDES="winedbg.exe=d;mscoree,mshtml=${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
+# Prefer DXMT's Direct3D DLLs, never start the debugger on a crash, and skip
+# the Mono and Gecko installers.
+export WINEDLLOVERRIDES="d3d11,dxgi,d3d10core=n,b;winedbg.exe=d;mscoree,mshtml=${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
 WINEDEBUG=-all arch -x86_64 $wine reg delete 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug' /v Debugger /f > /dev/null 2>&1 || true
 
 mkdir -p "$LOGS"
