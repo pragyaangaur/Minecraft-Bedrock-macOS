@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build the stand-in DLLs in stubs/src into build/stubs.
+# Build the stand-in DLLs in stubs/src and the winput tool into build/stubs.
 # They are freestanding x64 Windows binaries with no C runtime, built with
 # Homebrew's clang and lld. The import libraries come from the .def files.
 set -eu
@@ -27,5 +27,10 @@ for c in "$ROOT"/stubs/src/*.c; do
 done
 # A variant of the offline XCurl whose requests never complete.
 dll "$ROOT/stubs/src/XCurl.c" "$OUT/hang/XCurl.dll" -DFAIL_DELAY_MS=1000000000000ULL
+
+"$LLVM/clang" --target=x86_64-pc-windows-msvc -O1 -ffreestanding -fno-stack-protector \
+  -nostdlib -fuse-ld=lld -Wl,/entry:winput_entry -Wl,/subsystem:console -Wl,/nodefaultlib \
+  -o "$OUT/winput.exe" "$ROOT/tools/winput/winput.c" "$LIBS/user32.lib" "$LIBS/kernel32.lib"
+rm -f "$OUT/winput.lib" "$OUT/winput.exp"
 
 say "stubs built in $OUT"
