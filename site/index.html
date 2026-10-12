@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minecraft Bedrock on macOS</title>
+  <meta name="description" content="Play your own copy of Minecraft Bedrock Edition for Windows on an Apple Silicon Mac, fully offline.">
+  <meta property="og:title" content="Minecraft Bedrock on macOS">
+  <meta property="og:description" content="Play your own copy of Minecraft Bedrock Edition for Windows on an Apple Silicon Mac, fully offline.">
+  <meta property="og:image" content="https://pragyaangaur.github.io/Minecraft-Bedrock-macOS/images/coast.jpg">
+  <link rel="icon" href="favicon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="brand" href="#top"><img src="images/icon.png" alt="" width="32" height="32"> Bedrock for Mac</a>
+    <nav>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#install">Install</a>
+      <a href="#get-the-files">Game files</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/pragyaangaur/Minecraft-Bedrock-macOS">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">For Macs with Apple silicon</p>
+        <h1>Minecraft Bedrock Edition, running on your Mac.</h1>
+        <p class="lead">Mojang only makes Bedrock for Windows, phones and consoles. Bedrock Launcher takes the copy of the game you own on a Windows PC and runs it on a Mac with an M1 or later chip. Your worlds, survival, creative, the Nether and the End all work, at around 100 frames per second.</p>
+        <div class="buttons">
+          <a class="button primary" href="https://github.com/pragyaangaur/Minecraft-Bedrock-macOS/releases/latest/download/Bedrock-Launcher.dmg">
+            <span class="button-title">Download for Mac</span>
+            <span class="button-sub">Bedrock-Launcher.dmg, about 120 MB</span>
+          </a>
+          <a class="button" href="https://github.com/pragyaangaur/Minecraft-Bedrock-macOS">
+            <span class="button-title">View the source</span>
+            <span class="button-sub">on GitHub</span>
+          </a>
+        </div>
+        <p class="note">You need your own copy of Minecraft for Windows. The download contains no game files.</p>
+      </div>
+      <figure class="window hero-shot">
+        <img src="images/title.jpg" alt="The Minecraft title screen in a Mac window" width="1600" height="908">
+      </figure>
+    </section>
+
+    <section class="facts">
+      <div class="fact">
+        <h3>The real game</h3>
+        <p>This is the actual Windows build of Bedrock, not a remake or a mod. Worlds are saved in the same format as on Windows.</p>
+      </div>
+      <div class="fact">
+        <h3>Smooth on Apple silicon</h3>
+        <p>A Mac with an M4 chip runs it at about 100 frames per second with a 12 chunk render distance. Graphics go through Apple's Metal.</p>
+      </div>
+      <div class="fact">
+        <h3>Fully offline</h3>
+        <p>Nothing signs in and nothing is sent anywhere. Single player works completely. Realms, servers and the Marketplace do not.</p>
+      </div>
+    </section>
+
+    <section id="screenshots">
+      <h2>Screenshots</h2>
+      <p class="section-lead">All of these were taken on a Mac with an M4 chip.</p>
+      <div class="gallery">
+        <figure class="window wide"><img src="images/coast.jpg" alt="A sandy coast next to a savanna hill" loading="lazy"><figcaption>Exploring a survival world</figcaption></figure>
+        <figure class="window"><img src="images/hotbar.jpg" alt="First person view with a pickaxe and a full hotbar" loading="lazy"><figcaption>Playing in first person</figcaption></figure>
+        <figure class="window"><img src="images/player.jpg" alt="The player character seen from the front" loading="lazy"><figcaption>Your character and skin</figcaption></figure>
+        <figure class="window"><img src="images/inventory.jpg" alt="The creative inventory" loading="lazy"><figcaption>The inventory and crafting</figcaption></figure>
+        <figure class="window"><img src="images/worlds.jpg" alt="The world list with a creative and a survival world" loading="lazy"><figcaption>Your worlds</figcaption></figure>
+        <figure class="window"><img src="images/hills.jpg" alt="Sand steps leading up to a forest" loading="lazy"><figcaption>Every biome renders through Metal</figcaption></figure>
+        <figure class="window"><img src="images/fps.jpg" alt="The pause menu with Apple's performance overlay showing 106 frames per second" loading="lazy"><figcaption>106 frames per second on an M4</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="install">
+      <h2>How to install</h2>
+      <ol class="steps">
+        <li>
+          <h3>Download and copy the app</h3>
+          <p>Open <code>Bedrock-Launcher.dmg</code> and drag Bedrock Launcher into your Applications folder.</p>
+        </li>
+        <li>
+          <h3>Allow it to open</h3>
+          <p>The app is not signed by Apple, so macOS blocks it the first time. Open it once, then go to System Settings, Privacy &amp; Security, scroll down and click Open Anyway. You only need to do this once.</p>
+        </li>
+        <li>
+          <h3>Bring your game from Windows</h3>
+          <p>Copy the game folder and a memory dump of the running game from your Windows PC. <a href="#get-the-files">The steps are below</a>, and they take about 15 minutes.</p>
+        </li>
+        <li>
+          <h3>Open the app and play</h3>
+          <p>Bedrock Launcher asks for the folder, the dump and a player name. It prepares the game in about five minutes and starts it. After that, opening the app starts the game straight away.</p>
+        </li>
+      </ol>
+      <p class="note">If Rosetta 2 is not installed yet, the app offers to install it. It is Apple's translator for Intel programs, and the Windows parts of the game need it.</p>
+    </section>
+
+    <section id="get-the-files">
+      <h2>Getting the game files from Windows</h2>
+      <p class="section-lead">On Windows the game's main program is encrypted on disk and only decrypted while it runs. That is why the app needs a memory dump of the running game as well as the game folder. You need a Windows PC on which you own and have installed Minecraft for Windows, version 1.26.52.</p>
+      <div class="cards">
+        <div class="card">
+          <h3>1. Take the memory dump</h3>
+          <p>Install <a href="https://systeminformer.com">System Informer</a> and start it as administrator. Start Minecraft and wait for the title screen without signing in. In System Informer, right-click <code>Minecraft.Windows.exe</code> and choose Create dump file. The file is about 3 GB.</p>
+        </div>
+        <div class="card">
+          <h3>2. Copy the game folder</h3>
+          <p>Right-click <code>Minecraft.Windows.exe</code> again and choose Open file location. Copy that whole folder, about 2 GB. Windows will not copy <code>Minecraft.Windows.exe</code> itself, and you can skip it.</p>
+        </div>
+        <div class="card">
+          <h3>3. Move both to the Mac</h3>
+          <p>A USB drive formatted as exFAT works well, because the dump is too big for FAT32. Put both anywhere on the Mac and choose them when the app asks.</p>
+        </div>
+      </div>
+      <p class="note">Keep the dump private. If you signed in before taking it, it can contain your sign-in tokens. Once the app has prepared the game you can delete both copies.</p>
+    </section>
+
+    <section id="faq">
+      <h2>Questions</h2>
+      <details>
+        <summary>Do I need to own Minecraft?</summary>
+        <p>Yes. The app contains no game files at all. It runs the copy you bought for Windows, which you copy over yourself.</p>
+      </details>
+      <details>
+        <summary>Does it work on an Intel Mac?</summary>
+        <p>No. It needs a Mac with Apple silicon, which means an M1 chip or anything newer.</p>
+      </details>
+      <details>
+        <summary>Can I play online, on Realms or on servers?</summary>
+        <p>No. The game runs fully offline and nothing signs in to a Microsoft account. Single player worlds work completely, including the Nether, the End and the Ender Dragon.</p>
+      </details>
+      <details>
+        <summary>Can I move my worlds between the Mac and Windows?</summary>
+        <p>Yes. Worlds are stored in <code>~/Library/Application Support/Bedrock Launcher/prefix/drive_c/users/&lt;you&gt;/AppData/Roaming/Minecraft Bedrock/Users/Shared/games/com.mojang/minecraftWorlds</code>, in the same format as on Windows.</p>
+      </details>
+      <details>
+        <summary>The game paused when I clicked another window.</summary>
+        <p>The Windows version does the same. Click Resume Game to carry on.</p>
+      </details>
+      <details>
+        <summary>How does it work?</summary>
+        <p>It runs the Windows game on Wine with the Xbox GDK runtime from WineGDK, and DXMT turns its Direct3D 11 graphics into Metal. The executable is rebuilt from the memory dump, and a few dozen fixes were needed along the way. <a href="https://github.com/pragyaangaur/Minecraft-Bedrock-macOS/blob/main/docs/how-it-works.md">The full story is on GitHub</a>.</p>
+      </details>
+      <details>
+        <summary>Is this made by Mojang or Microsoft?</summary>
+        <p>No. It is an independent project and is not affiliated with Mojang or Microsoft. Minecraft is a trademark of Mojang Synergies AB.</p>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Bedrock for Mac is open source under the MIT licence. Wine and its patches are under the LGPL. <a href="https://github.com/pragyaangaur/Minecraft-Bedrock-macOS">Source on GitHub</a>.</p>
+    <p>Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</p>
+  </footer>
+</body>
+</html>
