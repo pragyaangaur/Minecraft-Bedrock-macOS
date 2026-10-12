@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:14 +0530
+Subject: [PATCH 08/21] xgameruntime: Remove a trace that read freed async
+ state.
+
+---
+ dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp b/dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp
+index ad0c573..cc5f6b5 100644
+--- a/dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp
++++ b/dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp
+@@ -806,10 +806,11 @@ HRESULT WINAPI XAsyncSchedule(
+         state.Get(),
+         WorkerCallback));
+ 
++    /* The trace that read state->queue after Detach() is gone.
++       Detach() leaves the ref empty and the worker may already have freed the
++       state, so it was a use after free (crash at xgameruntime+0x5610). */
+     state.Detach();
+ 
+-    TRACE("Before completion, queue here was %p\n", state->queue);
+-
+     return S_OK;
+ }
+ 
