@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:20 +0530
+Subject: [PATCH 17/21] gameinput: Create the mouse device without a foreground
+ window.
+
+---
+ dlls/gameinput/mouinput.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/gameinput/mouinput.c b/dlls/gameinput/mouinput.c
+index 21d7bf0..1b798bc 100644
+--- a/dlls/gameinput/mouinput.c
++++ b/dlls/gameinput/mouinput.c
+@@ -118,9 +118,11 @@ HRESULT mouse_input_device_InitDInput8Device( IN v2_IGameInputDevice *device )
+ 
+     TRACE( "device %p.\n", device );
+ 
++    /* The monitor thread runs this at start-up, before the game has a
++     * window, so GetForegroundWindow() is NULL. Failing here meant the game never got a
++     * mouse device. Fall back to a background, non-exclusive device with no window. */
+     hwnd = GetForegroundWindow();
+-    if ( !hwnd ) return E_FAIL;
+-                
++
+     hr = DirectInput8Create( game_input, DIRECTINPUT_VERSION, &IID_IDirectInput8W, (void**)&g_pDI, NULL );
+     if ( FAILED( hr ) ) return hr;
+ 
+@@ -130,7 +132,8 @@ HRESULT mouse_input_device_InitDInput8Device( IN v2_IGameInputDevice *device )
+     hr = g_pDevice->lpVtbl->SetDataFormat( g_pDevice, &c_dfDIMouse2 );
+     if ( FAILED( hr ) ) return hr;
+ 
+-    hr = g_pDevice->lpVtbl->SetCooperativeLevel( g_pDevice, hwnd, DISCL_FOREGROUND | DISCL_NONEXCLUSIVE );
++    /* Always background, so the device stays acquired whichever window has focus. */
++    hr = g_pDevice->lpVtbl->SetCooperativeLevel( g_pDevice, hwnd, DISCL_BACKGROUND | DISCL_NONEXCLUSIVE );
+     if ( FAILED( hr ) ) return hr;
+ 
+     // Acquire device
