@@ -1,11 +1,12 @@
 #!/bin/zsh
 # Run the game once under WineGDK and write Wine's output to a log in out/.
 #
-# Usage: [PREFIX=dir] [TAG=name] [EXE=file]
+# Usage: [PREFIX=dir] [TAG=name] [EXE=file] [XCURL=hang]
 #        tools/run_wine.sh [WINEDEBUG channels] [seconds before the game is stopped]
 #
 # PREFIX picks another Wine prefix (the default is prefix/). TAG is added to
 # the log name. EXE runs another rebuilt executable, such as the trace build.
+# XCURL=hang uses the offline XCurl whose requests never complete.
 #
 # drive_c/Minecraft is rebuilt on each run from symlinks into game/, with the
 # rebuilt executable from build/game and the stand-in DLLs
@@ -32,6 +33,7 @@ for f in "$GAME"/*(N); do
 done
 ln -s "${EXE:-$GAME_BUILD/Minecraft.Windows.exe}" "$run/Minecraft.Windows.exe"
 for d in "$BUILD"/stubs/*.dll(N); do ln -sf "$d" "$run/${d:t}"; done
+[[ ${XCURL:-} == hang ]] && ln -sf "$BUILD/stubs/hang/XCurl.dll" "$run/XCurl.dll"
 
 [[ -d $system32 ]] || WINEDLLOVERRIDES="mscoree,mshtml=" WINEDEBUG=-all arch -x86_64 $wine wineboot --init > /dev/null 2>&1
 
