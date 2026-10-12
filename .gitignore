@@ -1,0 +1,14 @@
+# Your copy of the game and anything built from it. The game files are
+# Mojang's and never belong in this repository. Memory dumps can also hold
+# sign-in tokens.
+/game/
+*.dmp
+
+# Everything the setup downloads or builds, the Wine prefix and the logs.
+/build/
+/prefix/
+/out/
+/.venv/
+__pycache__/
+
+.DS_Store
