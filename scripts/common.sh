@@ -3,15 +3,22 @@
 # Everything the scripts build or download goes under build/. The Windows
 # game files go under game/ and the Wine prefix under prefix/. All three are
 # ignored by git.
+#
+# The Mac app runs these scripts from inside its bundle. It sets MCB_DATA to a
+# folder in Application Support for the game, the prefix and the logs, and
+# MCB_WINE, MCB_STUBS and MCB_PYTHON to the copies it ships.
 
 ROOT="${${(%):-%x}:A:h:h}"
-BUILD="$ROOT/build"
-GAME="$ROOT/game"
+DATA="${MCB_DATA:-$ROOT}"
+BUILD="$DATA/build"
+GAME="$DATA/game"
 GAME_BUILD="$BUILD/game"
-WINE_PREFIX_DIR="$ROOT/prefix"
-WINE_DIR="$BUILD/wine"
-LOGS="$ROOT/out"
+WINE_PREFIX_DIR="$DATA/prefix"
+WINE_DIR="${MCB_WINE:-$BUILD/wine}"
+STUBS_DIR="${MCB_STUBS:-$BUILD/stubs}"
+LOGS="$DATA/out"
 VENV="$ROOT/.venv"
+PYTHON="${MCB_PYTHON:-$VENV/bin/python}"
 
 # Pinned upstream sources. The patches in patches/ apply to exactly these.
 WINEGDK_URL="https://github.com/Weather-OS/WineGDK.git"

@@ -20,6 +20,6 @@ mkdir -p "$games/minecraftpe"
 # Offline there is no gamertag, so the game would use an untranslated
 # character name. A 12 chunk render distance keeps the frame rate near 100;
 # the game picks 41 on a 16 GB Mac. Both can be changed in the game later.
-"$VENV/bin/python" -I "$ROOT/tools/options.py" "$games/minecraftpe/options.txt" \
+"$PYTHON" -I "$ROOT/tools/options.py" "$games/minecraftpe/options.txt" \
   "mp_username=${PLAYER_NAME:-$USER}" gfx_viewdistance=192
 say "prefix ready in $WINE_PREFIX_DIR"

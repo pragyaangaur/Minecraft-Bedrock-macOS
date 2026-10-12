@@ -39,8 +39,8 @@ if [[ ${FMOD:-guarded} == orig ]]; then
 else
   ln -s "$GAME_BUILD/fmod.dll" "$run/fmod.dll"
 fi
-for d in "$BUILD"/stubs/*.dll(N); do ln -sf "$d" "$run/${d:t}"; done
-[[ ${XCURL:-} == hang ]] && ln -sf "$BUILD/stubs/hang/XCurl.dll" "$run/XCurl.dll"
+for d in "$STUBS_DIR"/*.dll(N); do ln -sf "$d" "$run/${d:t}"; done
+[[ ${XCURL:-} == hang ]] && ln -sf "$STUBS_DIR/hang/XCurl.dll" "$run/XCurl.dll"
 
 [[ -d $system32 ]] || WINEDLLOVERRIDES="mscoree,mshtml=" WINEDEBUG=-all arch -x86_64 $wine wineboot --init > /dev/null 2>&1
 
@@ -57,7 +57,7 @@ WINEDEBUG=-all arch -x86_64 $wine reg delete 'HKLM\Software\Microsoft\Windows NT
 
 mkdir -p "$LOGS"
 log="$LOGS/wine${TAG:+_$TAG}_$(date +%Y%m%d_%H%M%S).log"
-echo "logging to ${log#$ROOT/} (WINEDEBUG=$WINEDEBUG, ${limit}s limit)"
+echo "logging to ${log#$DATA/} (WINEDEBUG=$WINEDEBUG, ${limit}s limit)"
 cd "$run"
 ( arch -x86_64 $wine 'C:\Minecraft\Minecraft.Windows.exe' > "$log" 2>&1 ) &
 pid=$!

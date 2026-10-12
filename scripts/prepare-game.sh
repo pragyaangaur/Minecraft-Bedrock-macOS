@@ -11,7 +11,7 @@ source "${0:A:h}/common.sh"
 
 (( $# == 2 )) || die "usage: scripts/prepare-game.sh <game folder> <dump.dmp>"
 src="${1:A}" dump="${2:A}"
-py=("$VENV/bin/python" -I)
+py=("$PYTHON" -I)
 [[ -f $src/layout.xml ]] || die "$src does not look like the game folder (no layout.xml)"
 [[ -f $dump ]] || die "no dump at $dump"
 [[ -x $py[1] ]] || die "the Python environment is missing. Run ./setup.sh first."
@@ -43,6 +43,6 @@ say "guarding FMOD's mixer against a divide by zero"
 
 if [[ ! -f $GAME/data/skin_packs/vanilla/skins.json || ! -f $GAME/data/skin_packs/persona/skins.json ]]; then
   say "data/skin_packs is missing, writing stand-ins"
-  "${py[@]}" "$ROOT/tools/make_skin_pack.py"
+  GAME="$GAME" "${py[@]}" "$ROOT/tools/make_skin_pack.py"
 fi
 say "game prepared"

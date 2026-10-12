@@ -11,7 +11,7 @@
 set -eu
 source "${0:A:h}/../../scripts/common.sh"
 export WINEPREFIX="${PREFIX:-$WINE_PREFIX_DIR}"
-cp -f "$BUILD/stubs/winput.exe" "$WINEPREFIX/drive_c/winput.exe"
+cp -f "$STUBS_DIR/winput.exe" "$WINEPREFIX/drive_c/winput.exe"
 pid=$(ps -axo pid,command | grep -v grep | grep 'C:\\Minecraft\\Minecraft.Windows.exe' | head -1 | awk '{print $1}')
 [[ -n $pid ]] || die "the game is not running"
 osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $pid) to true" 2> /dev/null

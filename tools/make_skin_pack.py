@@ -19,15 +19,16 @@ A real copy of the folders from the Windows install replaces all of this.
 import glob, json, os, struct, sys, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "game/data/skin_packs/vanilla")
-BRARCHIVE = os.path.join(ROOT, "game/data/resource_packs/vanilla/__brarchive/textures/entity.brarchive")
+GAME = os.environ.get("GAME") or os.path.join(ROOT, "game")
+OUT = os.path.join(GAME, "data/skin_packs/vanilla")
+BRARCHIVE = os.path.join(GAME, "data/resource_packs/vanilla/__brarchive/textures/entity.brarchive")
 VERSIONS = os.path.expanduser("~/Library/Application Support/minecraft/versions")
 PACK_UUID = "c18e65aa-7b21-4637-9b63-8ad63622ef01"
 NAMES = ["Steve", "Alex", "Noor", "Ari", "Sunny", "Makena", "Efe", "Zuri", "Kai"]
 SLIM = {"Alex"}
 # Other names the game builds with the vanilla pack uuid (exe 0x862b690), using Steve's and Alex's art.
 EXTRA = {"Dummy": "steve.png", "Custom": "steve.png", "CustomSlim": "alex.png"}
-PERSONA_DIR = os.path.join(ROOT, "game/data/skin_packs/persona")
+PERSONA_DIR = os.path.join(GAME, "data/skin_packs/persona")
 PERSONA_UUID = "5eb65f73-af11-448e-82aa-1b7b165316ad"
 PERSONA_SLOTS = ["personaProfile", "personaProfile1", "personaProfile2", "personaProfile3",
                  "personaProfile4", "personaProfile5", "personaProfileMultiplayer",
