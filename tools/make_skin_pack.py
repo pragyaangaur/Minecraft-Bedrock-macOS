@@ -22,6 +22,8 @@ JAR = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(
 PACK_UUID = "c18e65aa-7b21-4637-9b63-8ad63622ef01"
 NAMES = ["Steve", "Alex", "Noor", "Ari", "Sunny", "Makena", "Efe", "Zuri", "Kai"]
 SLIM = {"Alex"}
+# Other names the game builds with the vanilla pack uuid (exe 0x862b690), using Steve's and Alex's art.
+EXTRA = {"Dummy": "steve.png", "Custom": "steve.png", "CustomSlim": "alex.png"}
 
 
 def brarchive(path):
@@ -60,6 +62,10 @@ for name in NAMES:
     open(os.path.join(OUT, png), "wb").write(data)
     skins.append({"localization_name": name,
                   "geometry": "geometry.humanoid.customSlim" if arm == "slim" else "geometry.humanoid.custom",
+                  "texture": png, "type": "free"})
+for name, png in EXTRA.items():
+    skins.append({"localization_name": name,
+                  "geometry": "geometry.humanoid.customSlim" if name.endswith("Slim") else "geometry.humanoid.custom",
                   "texture": png, "type": "free"})
 
 write_pack(OUT, "Standard", PACK_UUID, "d9b8a0e4-5ac0-4b6c-9a4b-1f3f2b7c9e10", skins)
