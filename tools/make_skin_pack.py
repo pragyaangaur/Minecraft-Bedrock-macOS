@@ -76,6 +76,15 @@ for name, png in EXTRA.items():
                   "geometry": "geometry.humanoid.customSlim" if name.endswith("Slim") else "geometry.humanoid.custom",
                   "texture": png, "type": "free"})
 
+# Player geometry for the packs' geometry.json, from the vanilla resource pack's models/mobs.json.
+mobs = json.loads(brarchive(BRARCHIVE.replace("textures/entity.brarchive", "models.brarchive"))["mobs.json"])
+GEOMETRY = {k: v for k, v in mobs.items()
+            if k in ("format_version", "geometry.humanoid", "geometry.humanoid.custom:geometry.humanoid",
+                     "geometry.humanoid.customSlim")}
+for d in (OUT, PERSONA_DIR):
+    os.makedirs(d, exist_ok=True)
+    json.dump(GEOMETRY, open(os.path.join(d, "geometry.json"), "w"), indent=2)
+
 write_pack(OUT, "Standard", PACK_UUID, "d9b8a0e4-5ac0-4b6c-9a4b-1f3f2b7c9e10", skins)
 
 os.makedirs(PERSONA_DIR, exist_ok=True)
