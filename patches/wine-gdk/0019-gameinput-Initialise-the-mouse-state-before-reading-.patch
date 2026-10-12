@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:21 +0530
+Subject: [PATCH 19/21] gameinput: Initialise the mouse state before reading
+ it.
+
+---
+ dlls/gameinput/mouinput.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/dlls/gameinput/mouinput.c b/dlls/gameinput/mouinput.c
+index 3d9dc79..3183793 100644
+--- a/dlls/gameinput/mouinput.c
++++ b/dlls/gameinput/mouinput.c
+@@ -281,7 +281,12 @@ HRESULT mouse_input_device_ReadCurrentStateFromDInput8( IN v2_IGameInputDevice *
+ 
+     TRACE( "device %p, timestamp %lld, reading %p.\n", device, timestamp, reading );
+ 
++    /* MouseState was uninitialised, so buttons (|=) and positions were garbage. */
++    memset( &mouseState, 0, sizeof(mouseState) );
++    mouseState.positions = GameInputMouseRelativePosition;
+     GetCursorPos( &absoluteP );
++    mouseState.absolutePositionX = absoluteP.x;
++    mouseState.absolutePositionY = absoluteP.y;
+ 
+     hr = game_input_device_AcquireDInputDevice( device, &g_pDevice );
+     if ( FAILED( hr ) ) return hr;
