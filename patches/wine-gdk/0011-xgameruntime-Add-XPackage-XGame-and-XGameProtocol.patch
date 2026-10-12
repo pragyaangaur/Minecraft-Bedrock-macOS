@@ -1,0 +1,649 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:16 +0530
+Subject: [PATCH 11/21] xgameruntime: Add XPackage, XGame and XGameProtocol.
+
+---
+ .../GDKComponent/System/XGame.cpp             | 198 ++++++++++++++++++
+ .../GDKComponent/System/XGameProtocol.cpp     | 139 ++++++++++++
+ .../GDKComponent/System/XPackage.cpp          | 184 ++++++++++++++++
+ .../GDKComponent/System/XPackageGame.h        |  38 ++++
+ dlls/xgameruntime/Makefile.in                 |   3 +
+ dlls/xgameruntime/main.c                      |  16 ++
+ 6 files changed, 578 insertions(+)
+ create mode 100644 dlls/xgameruntime/GDKComponent/System/XGame.cpp
+ create mode 100644 dlls/xgameruntime/GDKComponent/System/XGameProtocol.cpp
+ create mode 100644 dlls/xgameruntime/GDKComponent/System/XPackage.cpp
+ create mode 100644 dlls/xgameruntime/GDKComponent/System/XPackageGame.h
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/XGame.cpp b/dlls/xgameruntime/GDKComponent/System/XGame.cpp
+new file mode 100644
+index 0000000..e407a41
+--- /dev/null
++++ b/dlls/xgameruntime/GDKComponent/System/XGame.cpp
+@@ -0,0 +1,198 @@
++/*
++ * Xbox Game runtime Library
++ *  GDK Component: System API -> XGame
++ *
++ * XGameGetXboxTitleId reads the title id from the
++ * game's own MicrosoftGame.config, next to the executable. The launch helpers
++ * are not supported here. Unanswered slots return E_NOTIMPL, not NULL.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#include "../../private.h"
++#include "XPackageGame.h"
++
++#include <atomic>
++#include <cstdlib>
++#include <cstring>
++#include <vector>
++
++WINE_DEFAULT_DEBUG_CHANNEL(gdkc);
++
++struct XGameImplObj;
++
++/* IXGameImpl (973a344e), IXGameImpl2 (50849859) and IXGameImpl3 (2549f142).
++ * Each adds slots after the previous ones, so one table serves all three. */
++struct XGameImplVtbl
++{
++    HRESULT ( WINAPI *QueryInterface )( XGameImplObj *, REFIID, void ** );
++    ULONG   ( WINAPI *AddRef )( XGameImplObj * );
++    ULONG   ( WINAPI *Release )( XGameImplObj * );
++    /* IXGameImpl slot 0 */
++    HRESULT ( WINAPI *XGameGetXboxTitleId )( XGameImplObj *, UINT32 * );
++    /* IXGameImpl2 slot 1 */
++    void    ( WINAPI *XLaunchNewGame )( XGameImplObj *, const char *, const char *, void * );
++    /* IXGameImpl3 slot 2 */
++    HRESULT ( WINAPI *XLaunchRestartOnCrash )( XGameImplObj *, const char *, UINT32 );
++    /* Remaining slots: not answered yet. */
++    HRESULT ( WINAPI *unimplemented[ 16 ] )( void );
++};
++
++struct XGameImplObj
++{
++    const XGameImplVtbl *lpVtbl;
++    std::atomic_long ref{ 1 };
++};
++
++static const GUID IID_IXGameImplSet[] = {
++    { 0x973a344e, 0x24bf, 0x4d0f, { 0x84, 0x57, 0x56, 0xc5, 0x34, 0x89, 0x2b, 0x29 } }, /* IXGameImpl */
++    { 0x50849859, 0x0ad8, 0x4f81, { 0x80, 0xe4, 0x5b, 0xc7, 0x86, 0x26, 0xf8, 0x52 } }, /* IXGameImpl2 */
++    { 0x2549f142, 0x6419, 0x4a06, { 0x97, 0xb5, 0x93, 0x1a, 0xab, 0x7c, 0x2f, 0x34 } }, /* IXGameImpl3 */
++};
++
++/* Reads <TitleId> (hex) from MicrosoftGame.config beside the executable. */
++static HRESULT ReadTitleIdFromConfig( UINT32 *titleId )
++{
++    char path[ MAX_PATH ];
++    const char *name = "MicrosoftGame.config";
++    DWORD len = GetModuleFileNameA( NULL, path, sizeof(path) );
++    char *slash;
++    HANDLE file;
++    LARGE_INTEGER size;
++    std::vector<char> text;
++    DWORD read = 0;
++    const char *open;
++    char *end;
++    unsigned long long value;
++
++    if ( !len || len >= sizeof(path) ) return E_GAME_MISSING_GAME_CONFIG;
++    slash = strrchr( path, '\\' );
++    if ( !slash || (size_t)( slash - path ) + 1 + strlen( name ) >= sizeof(path) ) return E_GAME_MISSING_GAME_CONFIG;
++    strcpy( slash + 1, name );
++
++    file = CreateFileA( path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
++    if ( file == INVALID_HANDLE_VALUE ) return E_GAME_MISSING_GAME_CONFIG;
++
++    if ( !GetFileSizeEx( file, &size ) || size.QuadPart <= 0 || size.QuadPart > ( 1 << 20 ) )
++    {
++        CloseHandle( file );
++        return E_GAMERUNTIME_GAMECONFIG_BAD_FORMAT;
++    }
++    text.resize( (size_t)size.QuadPart + 1 );
++    if ( !ReadFile( file, text.data(), (DWORD)size.QuadPart, &read, NULL ) )
++    {
++        CloseHandle( file );
++        return E_GAMERUNTIME_GAMECONFIG_BAD_FORMAT;
++    }
++    CloseHandle( file );
++    text[ read ] = 0;
++
++    open = strstr( text.data(), "<TitleId>" );
++    if ( !open ) return E_GAMERUNTIME_GAMECONFIG_BAD_FORMAT;
++    open += strlen( "<TitleId>" );
++    value = strtoull( open, &end, 16 );
++    if ( end == open || strncmp( end, "</TitleId>", 10 ) != 0 || value == 0 || value > 0xFFFFFFFFull )
++        return E_GAMERUNTIME_GAMECONFIG_BAD_FORMAT;
++
++    *titleId = (UINT32)value;
++    return S_OK;
++}
++
++static HRESULT WINAPI XGameImpl_QueryInterface( XGameImplObj *self, REFIID iid, void **out )
++{
++    TRACE( "iface %p, iid %s, out %p.\n", self, debugstr_guid( &iid ), out );
++
++    if ( !out ) return E_POINTER;
++    *out = nullptr;
++
++    if ( IsEqualGUID( iid, IID_IUnknown ) )
++    {
++        self->ref++;
++        *out = self;
++        return S_OK;
++    }
++    for ( auto &known : IID_IXGameImplSet )
++    {
++        if ( IsEqualGUID( iid, known ) )
++        {
++            self->ref++;
++            *out = self;
++            return S_OK;
++        }
++    }
++
++    FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( &iid ) );
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI XGameImpl_AddRef( XGameImplObj *self )
++{
++    return static_cast<ULONG>( ++self->ref );
++}
++
++static ULONG WINAPI XGameImpl_Release( XGameImplObj *self )
++{
++    /* The object is a process-wide singleton, never freed. */
++    return static_cast<ULONG>( --self->ref );
++}
++
++static HRESULT WINAPI XGameImpl_GetXboxTitleId( XGameImplObj *self, UINT32 *titleId )
++{
++    HRESULT hr;
++
++    TRACE( "iface %p, titleId %p.\n", self, titleId );
++    if ( !titleId ) return E_POINTER;
++
++    hr = ReadTitleIdFromConfig( titleId );
++    if ( FAILED( hr ) ) WARN( "No title id available, hr %#lx.\n", hr );
++    else TRACE( "title id %#lx.\n", (unsigned long)*titleId );
++    return hr;
++}
++
++static void WINAPI XGameImpl_LaunchNewGame( XGameImplObj *self, const char *exePath, const char *args, void *defaultUser )
++{
++    /* Starting another game is not supported. */
++    FIXME( "iface %p, exePath %s, args %s, defaultUser %p: not supported.\n", self, debugstr_a( exePath ), debugstr_a( args ), defaultUser );
++}
++
++static HRESULT WINAPI XGameImpl_LaunchRestartOnCrash( XGameImplObj *self, const char *args, UINT32 reserved )
++{
++    /* Restart-on-crash is not supported, so do not claim it is armed. */
++    FIXME( "iface %p, args %s, reserved %u: not supported.\n", self, debugstr_a( args ), reserved );
++    return E_NOTIMPL;
++}
++
++static HRESULT WINAPI XGameImpl_Unimplemented( void )
++{
++    FIXME( "XGame method not implemented, returning E_NOTIMPL.\n" );
++    return E_NOTIMPL;
++}
++
++static XGameImplVtbl xgame_vtbl =
++{
++    XGameImpl_QueryInterface,
++    XGameImpl_AddRef,
++    XGameImpl_Release,
++    XGameImpl_GetXboxTitleId,
++    XGameImpl_LaunchNewGame,
++    XGameImpl_LaunchRestartOnCrash,
++    { nullptr }
++};
++
++static XGameImplObj g_x_game = { &xgame_vtbl };
++
++HRESULT XGameImplQueryInterface( REFIID iid, void **out )
++{
++    /* Unanswered slots point at the generic stub, not NULL. */
++    static bool filled = false;
++    if ( !filled )
++    {
++        for ( auto &slot : xgame_vtbl.unimplemented )
++            slot = XGameImpl_Unimplemented;
++        filled = true;
++    }
++    return XGameImpl_QueryInterface( &g_x_game, iid, out );
++}
+diff --git a/dlls/xgameruntime/GDKComponent/System/XGameProtocol.cpp b/dlls/xgameruntime/GDKComponent/System/XGameProtocol.cpp
+new file mode 100644
+index 0000000..b066c37
+--- /dev/null
++++ b/dlls/xgameruntime/GDKComponent/System/XGameProtocol.cpp
+@@ -0,0 +1,139 @@
++/*
++ * Xbox Game runtime Library
++ *  GDK Component: System API -> XGameProtocol
++ *
++ * Registration for protocol activation succeeds and
++ * hands back a token, but this process is never started from a protocol URI,
++ * so the callback is never called. Unregistering just forgets the token.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#include "../../private.h"
++#include "XPackageGame.h"
++
++#include <atomic>
++#include <mutex>
++#include <set>
++
++WINE_DEFAULT_DEBUG_CHANNEL(gdkc);
++
++struct XGameProtocolImplObj;
++
++/* IXGameProtocolImpl (026b010c). */
++struct XGameProtocolImplVtbl
++{
++    HRESULT ( WINAPI *QueryInterface )( XGameProtocolImplObj *, REFIID, void ** );
++    ULONG   ( WINAPI *AddRef )( XGameProtocolImplObj * );
++    ULONG   ( WINAPI *Release )( XGameProtocolImplObj * );
++    /* Slot 0 */
++    HRESULT ( WINAPI *XGameProtocolRegisterForActivation )( XGameProtocolImplObj *, XTaskQueueHandle, void *, void *, XTaskQueueRegistrationToken * );
++    /* Slot 1 */
++    BOOLEAN ( WINAPI *XGameProtocolUnregisterForActivation )( XGameProtocolImplObj *, XTaskQueueRegistrationToken, BOOLEAN );
++    HRESULT ( WINAPI *unimplemented[ 8 ] )( void );
++};
++
++struct XGameProtocolImplObj
++{
++    const XGameProtocolImplVtbl *lpVtbl;
++    std::atomic_long ref{ 1 };
++};
++
++static const GUID IID_IXGameProtocolImplSet[] = {
++    { 0x026b010c, 0x06c3, 0x4cdd, { 0xbb, 0xcb, 0x43, 0xf2, 0x29, 0xdb, 0x1c, 0xff } }, /* IXGameProtocolImpl */
++};
++
++static std::mutex protocol_lock;
++static std::set<UINT64> protocol_tokens;
++static UINT64 next_protocol_token = 1;
++
++static HRESULT WINAPI XGameProtocolImpl_QueryInterface( XGameProtocolImplObj *self, REFIID iid, void **out )
++{
++    TRACE( "iface %p, iid %s, out %p.\n", self, debugstr_guid( &iid ), out );
++
++    if ( !out ) return E_POINTER;
++    *out = nullptr;
++
++    if ( IsEqualGUID( iid, IID_IUnknown ) )
++    {
++        self->ref++;
++        *out = self;
++        return S_OK;
++    }
++    for ( auto &known : IID_IXGameProtocolImplSet )
++    {
++        if ( IsEqualGUID( iid, known ) )
++        {
++            self->ref++;
++            *out = self;
++            return S_OK;
++        }
++    }
++
++    FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( &iid ) );
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI XGameProtocolImpl_AddRef( XGameProtocolImplObj *self )
++{
++    return static_cast<ULONG>( ++self->ref );
++}
++
++static ULONG WINAPI XGameProtocolImpl_Release( XGameProtocolImplObj *self )
++{
++    /* The object is a process-wide singleton, never freed. */
++    return static_cast<ULONG>( --self->ref );
++}
++
++static HRESULT WINAPI XGameProtocolImpl_RegisterForActivation( XGameProtocolImplObj *self, XTaskQueueHandle queue, void *context, void *callback, XTaskQueueRegistrationToken *token )
++{
++    TRACE( "iface %p, queue %p, context %p, callback %p, token %p.\n", self, queue, context, callback, token );
++    if ( !callback || !token ) return E_POINTER;
++
++    std::lock_guard<std::mutex> guard( protocol_lock );
++    token->token = next_protocol_token++;
++    protocol_tokens.insert( token->token );
++    return S_OK;
++}
++
++static BOOLEAN WINAPI XGameProtocolImpl_UnregisterForActivation( XGameProtocolImplObj *self, XTaskQueueRegistrationToken token, BOOLEAN wait )
++{
++    TRACE( "iface %p, token %llu, wait %d.\n", self, (unsigned long long)token.token, wait );
++
++    std::lock_guard<std::mutex> guard( protocol_lock );
++    return protocol_tokens.erase( token.token ) ? TRUE : FALSE;
++}
++
++static HRESULT WINAPI XGameProtocolImpl_Unimplemented( void )
++{
++    FIXME( "XGameProtocol method not implemented, returning E_NOTIMPL.\n" );
++    return E_NOTIMPL;
++}
++
++static XGameProtocolImplVtbl xgame_protocol_vtbl =
++{
++    XGameProtocolImpl_QueryInterface,
++    XGameProtocolImpl_AddRef,
++    XGameProtocolImpl_Release,
++    XGameProtocolImpl_RegisterForActivation,
++    XGameProtocolImpl_UnregisterForActivation,
++    { nullptr }
++};
++
++static XGameProtocolImplObj g_x_game_protocol = { &xgame_protocol_vtbl };
++
++HRESULT XGameProtocolImplQueryInterface( REFIID iid, void **out )
++{
++    /* Unanswered slots point at the generic stub, not NULL. */
++    static bool filled = false;
++    if ( !filled )
++    {
++        for ( auto &slot : xgame_protocol_vtbl.unimplemented )
++            slot = XGameProtocolImpl_Unimplemented;
++        filled = true;
++    }
++    return XGameProtocolImpl_QueryInterface( &g_x_game_protocol, iid, out );
++}
+diff --git a/dlls/xgameruntime/GDKComponent/System/XPackage.cpp b/dlls/xgameruntime/GDKComponent/System/XPackage.cpp
+new file mode 100644
+index 0000000..c1ff4d3
+--- /dev/null
++++ b/dlls/xgameruntime/GDKComponent/System/XPackage.cpp
+@@ -0,0 +1,184 @@
++/*
++ * Xbox Game runtime Library
++ *  GDK Component: System API -> XPackage
++ *
++ * This process is a plain Win32 executable with no
++ * package identity, so the package queries answer that truthfully.
++ * XPackageGetUserLocale answers with the real Windows user locale. Every other
++ * slot returns E_NOTIMPL and logs its vtable index, so the game gets a usable
++ * interface instead of NULL and the log names what it asked for.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#include "../../private.h"
++#include "XPackageGame.h"
++
++#include <atomic>
++#include <utility>
++
++WINE_DEFAULT_DEBUG_CHANNEL(gdkc);
++
++struct XPackageImplObj;
++
++typedef HRESULT ( WINAPI *XPackageStubFn )( void );
++
++/* Layout follows IXPackageImpl..IXPackageImpl4 (docs COM/XPackageImpl and
++ * research xpackage.idl). Vtable index = IUnknown (0..2) + list position + 3.
++ * The successor interfaces extend this layout, so one table serves all of them. */
++struct XPackageImplVtbl
++{
++    HRESULT ( WINAPI *QueryInterface )( XPackageImplObj *, REFIID, void ** );              /* 0 */
++    ULONG   ( WINAPI *AddRef )( XPackageImplObj * );                                       /* 1 */
++    ULONG   ( WINAPI *Release )( XPackageImplObj * );                                      /* 2 */
++    /* IXPackageImpl list position 0 */
++    HRESULT ( WINAPI *XPackageGetCurrentProcessPackageIdentifier )( XPackageImplObj *, SIZE_T, char * ); /* 3 */
++    /* List position 1 */
++    BOOLEAN ( WINAPI *XPackageIsPackagedProcess )( XPackageImplObj * );                    /* 4 */
++    /* List positions 2..7: installation monitor and chunk-install calls, not answered yet */
++    XPackageStubFn unimplemented_5_10[ 6 ];                                                /* 5..10 */
++    /* List position 8 */
++    HRESULT ( WINAPI *XPackageGetUserLocale )( XPackageImplObj *, SIZE_T, char * );        /* 11 */
++    /* List positions 9 onward, not answered yet */
++    XPackageStubFn unimplemented_12_63[ 52 ];                                              /* 12..63 */
++};
++
++struct XPackageImplObj
++{
++    const XPackageImplVtbl *lpVtbl;
++    std::atomic_long ref{ 1 };
++};
++
++static const GUID IID_IXPackageImplSet[] = {
++    { 0x3720de07, 0xe8e4, 0x44a3, { 0xad, 0x32, 0xb3, 0x59, 0xe8, 0xad, 0xbe, 0x55 } }, /* IXPackageImpl */
++    { 0xf92d8712, 0x2b27, 0x4d8a, { 0xbf, 0x01, 0x11, 0xa6, 0xf8, 0xe3, 0xeb, 0x42 } }, /* IXPackageImpl2 */
++    { 0xe2a4734b, 0x2f4a, 0x456d, { 0xaa, 0x8f, 0xd0, 0x65, 0xe0, 0x4f, 0xb2, 0x09 } }, /* IXPackageImpl3 */
++    { 0x0b9d556e, 0xab70, 0x43f4, { 0xba, 0xa0, 0x99, 0x99, 0xac, 0x4c, 0xb0, 0x40 } }, /* IXPackageImpl4 */
++};
++
++static HRESULT WINAPI XPackageImpl_QueryInterface( XPackageImplObj *self, REFIID iid, void **out )
++{
++    TRACE( "iface %p, iid %s, out %p.\n", self, debugstr_guid( &iid ), out );
++
++    if ( !out ) return E_POINTER;
++    *out = nullptr;
++
++    if ( IsEqualGUID( iid, IID_IUnknown ) )
++    {
++        self->ref++;
++        *out = self;
++        return S_OK;
++    }
++    for ( auto &known : IID_IXPackageImplSet )
++    {
++        if ( IsEqualGUID( iid, known ) )
++        {
++            self->ref++;
++            *out = self;
++            return S_OK;
++        }
++    }
++
++    FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( &iid ) );
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI XPackageImpl_AddRef( XPackageImplObj *self )
++{
++    return static_cast<ULONG>( ++self->ref );
++}
++
++static ULONG WINAPI XPackageImpl_Release( XPackageImplObj *self )
++{
++    /* The object is a process-wide singleton, never freed. */
++    return static_cast<ULONG>( --self->ref );
++}
++
++static HRESULT WINAPI XPackageImpl_GetCurrentProcessPackageIdentifier( XPackageImplObj *self, SIZE_T bufferSize, char *buffer )
++{
++    TRACE( "iface %p, bufferSize %Iu, buffer %p.\n", self, bufferSize, buffer );
++    /* The process was not started from a package, so it has no package identifier. */
++    return E_GAMEUSER_NO_PACKAGE_IDENTITY;
++}
++
++static BOOLEAN WINAPI XPackageImpl_IsPackagedProcess( XPackageImplObj *self )
++{
++    TRACE( "iface %p.\n", self );
++    return FALSE;
++}
++
++/* XPackageGetUserLocale (IXPackageImpl list position 8, vtable index 11).
++ * Writes the user's default locale name (for example "en-US") as UTF-8 with a
++ * terminating NUL. Errors: E_INVALIDARG for a missing or empty buffer,
++ * E_NOT_SUFFICIENT_BUFFER (ERROR_INSUFFICIENT_BUFFER) when the buffer is too small. */
++static HRESULT WINAPI XPackageImpl_GetUserLocale( XPackageImplObj *self, SIZE_T localeSize, char *locale )
++{
++    WCHAR wide[ LOCALE_NAME_MAX_LENGTH ];
++    int needed;
++
++    TRACE( "iface %p, localeSize %Iu, locale %p.\n", self, localeSize, locale );
++
++    if ( !locale || localeSize == 0 ) return E_INVALIDARG;
++    if ( !GetUserDefaultLocaleName( wide, LOCALE_NAME_MAX_LENGTH ) )
++        return HRESULT_FROM_WIN32( GetLastError() );
++
++    needed = WideCharToMultiByte( CP_UTF8, 0, wide, -1, NULL, 0, NULL, NULL );
++    if ( needed <= 0 ) return HRESULT_FROM_WIN32( GetLastError() );
++    if ( (SIZE_T)needed > localeSize )
++    {
++        locale[ 0 ] = 0;
++        return HRESULT_FROM_WIN32( ERROR_INSUFFICIENT_BUFFER );
++    }
++    WideCharToMultiByte( CP_UTF8, 0, wide, -1, locale, needed, NULL, NULL );
++    return S_OK;
++}
++
++/* One stub per unanswered slot, so the log names the vtable index the game calls. */
++template <unsigned int N>
++static HRESULT WINAPI XPackageImpl_Unimplemented( void )
++{
++    FIXME( "IXPackageImpl vtable slot %u not implemented, returning E_NOTIMPL.\n", N );
++    return E_NOTIMPL;
++}
++
++static XPackageImplVtbl xpackage_vtbl =
++{
++    XPackageImpl_QueryInterface,
++    XPackageImpl_AddRef,
++    XPackageImpl_Release,
++    XPackageImpl_GetCurrentProcessPackageIdentifier,
++    XPackageImpl_IsPackagedProcess,
++    { nullptr },
++    XPackageImpl_GetUserLocale,
++    { nullptr },
++};
++
++template <size_t... I>
++static void FillUnimplementedLow( std::index_sequence<I...> )
++{
++    ( ( xpackage_vtbl.unimplemented_5_10[I] = &XPackageImpl_Unimplemented<5 + (unsigned int)I> ), ... );
++}
++
++template <size_t... I>
++static void FillUnimplementedHigh( std::index_sequence<I...> )
++{
++    ( ( xpackage_vtbl.unimplemented_12_63[I] = &XPackageImpl_Unimplemented<12 + (unsigned int)I> ), ... );
++}
++
++static XPackageImplObj g_x_package = { &xpackage_vtbl };
++
++HRESULT XPackageImplQueryInterface( REFIID iid, void **out )
++{
++    /* Unanswered slots point at the generic stub, not NULL. */
++    static bool filled = false;
++    if ( !filled )
++    {
++        FillUnimplementedLow( std::make_index_sequence<6>{} );
++        FillUnimplementedHigh( std::make_index_sequence<52>{} );
++        filled = true;
++    }
++    return XPackageImpl_QueryInterface( &g_x_package, iid, out );
++}
+diff --git a/dlls/xgameruntime/GDKComponent/System/XPackageGame.h b/dlls/xgameruntime/GDKComponent/System/XPackageGame.h
+new file mode 100644
+index 0000000..11b9ee9
+--- /dev/null
++++ b/dlls/xgameruntime/GDKComponent/System/XPackageGame.h
+@@ -0,0 +1,38 @@
++/*
++ * Xbox Game runtime Library
++ *  GDK Component: System API -> XPackage, XGame, XGameProtocol
++ *
++ * Answers the QueryApiImpl requests for these
++ * classes honestly (no package identity, title id from MicrosoftGame.config,
++ * no protocol activations) instead of returning E_NOINTERFACE, which left the
++ * game with a NULL interface.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#ifndef XPACKAGEGAME_H
++#define XPACKAGEGAME_H
++
++#include <windows.h>
++
++/* Class ids from the GDK COM reference (docs COM/XPackageImpl, XGameImpl, XGameProtocolImpl). */
++static const GUID CLSID_XPackageImpl = { 0xaf406016, 0xe850, 0x4aa8, { 0xa8, 0x8d, 0x2f, 0x3d, 0xcb, 0x9d, 0xac, 0x7e } };
++static const GUID CLSID_XGameImpl = { 0x973a344e, 0x24bf, 0x4d0f, { 0x84, 0x57, 0x56, 0xc5, 0x34, 0x89, 0x2b, 0x29 } };
++static const GUID CLSID_XGameProtocolImpl = { 0x95fd18d2, 0x74dd, 0x4d7c, { 0xaa, 0x1b, 0x0b, 0x51, 0x82, 0x76, 0x65, 0xd6 } };
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++HRESULT XPackageImplQueryInterface( REFIID iid, void **out );
++HRESULT XGameImplQueryInterface( REFIID iid, void **out );
++HRESULT XGameProtocolImplQueryInterface( REFIID iid, void **out );
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* XPACKAGEGAME_H */
+diff --git a/dlls/xgameruntime/Makefile.in b/dlls/xgameruntime/Makefile.in
+index 8dd6a5b..9e44580 100644
+--- a/dlls/xgameruntime/Makefile.in
++++ b/dlls/xgameruntime/Makefile.in
+@@ -24,6 +24,9 @@ SOURCES = \
+ 	GDKComponent/System/XSystemAnalytics.cpp \
+ 	GDKComponent/System/XNetworking.cpp \
+ 	GDKComponent/System/XUser.cpp \
++	GDKComponent/System/XPackage.cpp \
++	GDKComponent/System/XGame.cpp \
++	GDKComponent/System/XGameProtocol.cpp \
+ 	\
+ 	GDKComponent/Xodus/Structs.cpp \
+ 	GDKComponent/Xodus/IPCLayer.cpp \
+diff --git a/dlls/xgameruntime/main.c b/dlls/xgameruntime/main.c
+index cbdc654..48b41ae 100644
+--- a/dlls/xgameruntime/main.c
++++ b/dlls/xgameruntime/main.c
+@@ -21,6 +21,7 @@
+ #include "initguid.h"
+ #include "private.h"
+ #include "GDKComponent/InitInternalGDKC.h"
++#include "GDKComponent/System/XPackageGame.h"
+ 
+ #include "ntstatus.h"
+ 
+@@ -240,6 +241,21 @@ HRESULT WINAPI QueryApiImpl( const GUID *runtimeClassId, REFIID interfaceId, voi
+         /* XUser reports that no user is signed in. */
+         return IXUserImpl_QueryInterface( x_user, interfaceId, out );
+     }
++    else if ( IsEqualGUID( runtimeClassId, &CLSID_XPackageImpl ) )
++    {
++        /* Not a packaged process. */
++        return XPackageImplQueryInterface( interfaceId, out );
++    }
++    else if ( IsEqualGUID( runtimeClassId, &CLSID_XGameImpl ) )
++    {
++        /* Title id from MicrosoftGame.config. */
++        return XGameImplQueryInterface( interfaceId, out );
++    }
++    else if ( IsEqualGUID( runtimeClassId, &CLSID_XGameProtocolImpl ) )
++    {
++        /* No protocol activations. */
++        return XGameProtocolImplQueryInterface( interfaceId, out );
++    }
+     else if ( IsEqualGUID( runtimeClassId, &CLSID_XGameRuntimeFeatureImpl ) )
+     {
+         return IXGameRuntimeFeatureImpl_QueryInterface( x_game_runtime_feature, interfaceId, out );
