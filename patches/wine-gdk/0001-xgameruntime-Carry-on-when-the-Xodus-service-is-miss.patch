@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:12 +0530
+Subject: [PATCH 01/21] xgameruntime: Carry on when the Xodus service is
+ missing.
+
+---
+ dlls/xgameruntime/main.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/xgameruntime/main.c b/dlls/xgameruntime/main.c
+index f5aa616..72dba13 100644
+--- a/dlls/xgameruntime/main.c
++++ b/dlls/xgameruntime/main.c
+@@ -176,7 +176,9 @@ HRESULT WINAPI InitializeApiImplEx2( ULONG gdkVer, ULONG gsVer, CHAR mode, INITI
+ #ifdef XODUS_INTEROP
+     if ( !unixlib )
+     {
+-        if ( FAILED( hr = LoadUnixLib() ) ) return hr;
++        /* Xodus is an optional companion service. Without its
++         * socket, carry on with the built-in components instead of failing. */
++        if ( FAILED( hr = LoadUnixLib() ) ) WARN( "Xodus unavailable (%#lx), continuing without it.\n", hr );
+     }
+ #endif
+ 
