@@ -8,7 +8,8 @@ for w in list {
   let on = w[kCGWindowIsOnscreen as String] as? Bool ?? false
   let alpha = w[kCGWindowAlpha as String] as? Double ?? -1
   let b = w[kCGWindowBounds as String] as? [String: Any] ?? [:]
-  if owner == "wine" && name == "Minecraft" {
+  // Started from the app, the window belongs to Bedrock Launcher instead of wine.
+  if (owner == "wine" || owner == "Bedrock Launcher") && name == "Minecraft" {
     print("id=\(num) onscreen=\(on) alpha=\(alpha) bounds=\(b)")
   }
 }
