@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:21 +0530
+Subject: [PATCH 18/21] gameinput: Keep the mouse info alive after device
+ creation.
+
+---
+ dlls/gameinput/mouinput.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/gameinput/mouinput.c b/dlls/gameinput/mouinput.c
+index 1b798bc..3d9dc79 100644
+--- a/dlls/gameinput/mouinput.c
++++ b/dlls/gameinput/mouinput.c
+@@ -152,7 +152,9 @@ HRESULT mouse_input_device_InitDevice( IN v2_IGameInputDevice *device )
+     HIDP_VALUE_CAPS *valueCaps = NULL;
+ 
+     v2_IGameInputDevice *dev = NULL;
+-    v2_GameInputMouseInfo mouse_info;
++    /* Static, because device_info->mouseInfo keeps pointing at it after return
++     * (it used to be a stack local, so the game read a dangling pointer). */
++    static v2_GameInputMouseInfo mouse_info;
+     v2_GameInputDeviceInfo *device_info;
+     GameInputMouseButtons buttons = GameInputMouseNone;
+ 
