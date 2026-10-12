@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:22 +0530
+Subject: [PATCH 20/21] mmdevapi: Never return a mix format with zero channels.
+
+---
+ dlls/mmdevapi/client.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/dlls/mmdevapi/client.c b/dlls/mmdevapi/client.c
+index d4d3e82..b93bdc8 100644
+--- a/dlls/mmdevapi/client.c
++++ b/dlls/mmdevapi/client.c
+@@ -881,6 +881,17 @@ static HRESULT WINAPI client_GetMixFormat(IAudioClient3 *iface, WAVEFORMATEX **p
+     wine_unix_call(get_mix_format, &params);
+ 
+     if (SUCCEEDED(params.result)) {
++        /* Never hand out a 0-channel format or a 0 channel mask. */
++        if (!params.fmt->Format.nChannels) {
++            WARN("Mix format reports 0 channels, falling back to stereo\n");
++            params.fmt->Format.nChannels = 2;
++            params.fmt->Format.nBlockAlign = 2 * params.fmt->Format.wBitsPerSample / 8;
++            params.fmt->Format.nAvgBytesPerSec = params.fmt->Format.nSamplesPerSec * params.fmt->Format.nBlockAlign;
++        }
++        if (params.fmt->Format.wFormatTag == WAVE_FORMAT_EXTENSIBLE && !params.fmt->dwChannelMask) {
++            WARN("Mix format has a 0 channel mask, falling back to stereo\n");
++            params.fmt->dwChannelMask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
++        }
+         *pwfx = &params.fmt->Format;
+         dump_fmt(*pwfx);
+     } else
