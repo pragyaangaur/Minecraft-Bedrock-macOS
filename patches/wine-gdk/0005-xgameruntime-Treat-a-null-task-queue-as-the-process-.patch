@@ -1,0 +1,55 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:13 +0530
+Subject: [PATCH 05/21] xgameruntime: Treat a null task queue as the process
+ queue.
+
+---
+ .../System/Threading/XTaskQueue.cpp           | 25 +++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.cpp b/dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.cpp
+index c03d27f..0219126 100644
+--- a/dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.cpp
++++ b/dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.cpp
+@@ -21,8 +21,25 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(gdkc);
+ 
++BOOLEAN XTaskQueueGetCurrentProcessTaskQueue(XTaskQueueHandle* queue);
++void XTaskQueueCloseHandle(XTaskQueueHandle queue);
++
+ inline ITaskQueue* GetQueue(XTaskQueueHandle handle)
+ {
++    /* As in the GDK, a null handle means the process default
++     * queue. Minecraft Bedrock and its XCurl pass null to several calls. */
++    if (handle == nullptr)
++    {
++        XTaskQueueHandle processQueue;
++        if (!XTaskQueueGetCurrentProcessTaskQueue(&processQueue))
++        {
++            return nullptr;
++        }
++        ITaskQueue* queue = processQueue->m_queue;
++        XTaskQueueCloseHandle(processQueue);
++        return queue;
++    }
++
+     if (handle->m_signature != TASK_QUEUE_SIGNATURE)
+     {
+         assert("Invalid XTaskQueueHandle");
+@@ -1851,6 +1868,14 @@ BOOLEAN XTaskQueueDispatch(
+ void XTaskQueueCloseHandle(
+     XTaskQueueHandle queue
+ ) {
++    /* GetQueue(nullptr) now maps to the process queue, so a
++     * null handle here would drop a reference nobody took. */
++    if (queue == nullptr)
++    {
++        WARN("XTaskQueueCloseHandle(nullptr) ignored.\n");
++        return;
++    }
++
+     ITaskQueue* aq = GetQueue(queue);
+ 
+     if (aq != nullptr)
