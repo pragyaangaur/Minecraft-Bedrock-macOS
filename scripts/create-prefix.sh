@@ -17,8 +17,9 @@ games="$WINE_PREFIX_DIR/drive_c/users/$USER/AppData/Roaming/Minecraft Bedrock/Us
 mkdir -p "$games/minecraftpe"
 [[ -f $games/ud1544803905_fb.dat ]] || cp "$ROOT/stubs/seed/ud1544803905_fb.dat" "$games/"
 
-# The game picks a 41 chunk render distance on a 16 GB Mac, which keeps the
-# frame rate near 26. Start new installs at 12 chunks, which runs near 100.
-# It can be changed in the game later.
-"$VENV/bin/python" -I "$ROOT/tools/options.py" "$games/minecraftpe/options.txt" gfx_viewdistance=192
+# Offline there is no gamertag, so the game would use an untranslated
+# character name. A 12 chunk render distance keeps the frame rate near 100;
+# the game picks 41 on a 16 GB Mac. Both can be changed in the game later.
+"$VENV/bin/python" -I "$ROOT/tools/options.py" "$games/minecraftpe/options.txt" \
+  "mp_username=${PLAYER_NAME:-$USER}" gfx_viewdistance=192
 say "prefix ready in $WINE_PREFIX_DIR"
