@@ -16,6 +16,8 @@ __declspec(dllimport) void *__stdcall HeapAlloc(void *, ULONG, usize);
 __declspec(dllimport) int __stdcall HeapFree(void *, ULONG, void *);
 __declspec(dllimport) void __stdcall Sleep(ULONG);
 __declspec(dllimport) usize __stdcall GetTickCount64(void);
+/* stubs/build.sh also builds a variant with a huge FAIL_DELAY_MS, so requests
+   never finish. tools/run_wine.sh uses it when XCURL=hang is set. */
 #ifndef FAIL_DELAY_MS
 #define FAIL_DELAY_MS 250
 #endif

@@ -8,7 +8,7 @@ source "${0:A:h}/../scripts/common.sh"
 LLVM="$BREW/opt/llvm/bin"
 OUT="$BUILD/stubs"
 LIBS="$OUT/lib"
-mkdir -p "$LIBS"
+mkdir -p "$LIBS" "$OUT/hang"
 
 for def in "$ROOT"/stubs/lib/*.def; do
   "$LLVM/llvm-dlltool" -m i386:x86-64 -d "$def" -l "$LIBS/${def:t:r}.lib"
@@ -25,5 +25,7 @@ dll() {  # dll <source> <output> [extra clang flags]
 for c in "$ROOT"/stubs/src/*.c; do
   dll "$c" "$OUT/${c:t:r}.dll"
 done
+# A variant of the offline XCurl whose requests never complete.
+dll "$ROOT/stubs/src/XCurl.c" "$OUT/hang/XCurl.dll" -DFAIL_DELAY_MS=1000000000000ULL
 
 say "stubs built in $OUT"
