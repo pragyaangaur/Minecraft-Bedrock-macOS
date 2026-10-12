@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:18 +0530
+Subject: [PATCH 14/21] winhttp: Never run read and query completions inline.
+
+---
+ dlls/winhttp/request.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/winhttp/request.c b/dlls/winhttp/request.c
+index 62664e6..fbe6aae 100644
+--- a/dlls/winhttp/request.c
++++ b/dlls/winhttp/request.c
+@@ -3363,7 +3363,12 @@ static BOOL skip_async_queue( struct request *request, BOOL *wont_block, DWORD t
+ {
+     to_read = min( to_read, request->content_length - request->content_read );
+     *wont_block = end_of_data_stream( request ) || request->read.size >= to_read;
+-    return request->hdr.recursion_count <= RECURSION_LIMIT && *wont_block;
++    /* Never run the completion callback inline. When data is
++     * ready, do the work now but deliver DATA_AVAILABLE or READ_COMPLETE from
++     * the request queue after the call returns. XCurl sets up its read buffer
++     * only after WinHttpQueryDataAvailable returns, so an inline callback made
++     * it read 0 bytes, treat that as the end of the body and tear down early. */
++    return FALSE;
+ }
+ 
+ static DWORD query_data_available( struct request *request, DWORD *available, BOOL async )
