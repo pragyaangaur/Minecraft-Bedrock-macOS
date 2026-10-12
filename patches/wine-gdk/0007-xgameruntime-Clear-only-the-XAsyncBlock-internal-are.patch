@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:14 +0530
+Subject: [PATCH 07/21] xgameruntime: Clear only the XAsyncBlock internal area.
+
+---
+ .../GDKComponent/System/Threading/XAsync.cpp             | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp b/dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp
+index 6b30344..ad0c573 100644
+--- a/dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp
++++ b/dlls/xgameruntime/GDKComponent/System/Threading/XAsync.cpp
+@@ -405,10 +405,11 @@ static HRESULT AllocState(XAsyncBlock* asyncBlock, size_t contextSize)
+         RETURN_HR(E_INVALIDARG);
+     }
+ 
+-    for (auto i = 0u; i < sizeof(asyncBlock->internal); ++i)
+-    {
+-        asyncBlock->internal[i] = 0;
+-    }
++    /* Internal is void*[4] here (it is a byte array in the GDK),
++     * so the old loop up to sizeof() zeroed 256 bytes, 224 of them past the
++     * block: that is what wiped the heap block headers behind the game's
++     * XAsyncBlocks. */
++    memset(asyncBlock->internal, 0, sizeof(asyncBlock->internal));
+ 
+     internal = new (asyncBlock->internal) AsyncBlockInternal{};
+ 
