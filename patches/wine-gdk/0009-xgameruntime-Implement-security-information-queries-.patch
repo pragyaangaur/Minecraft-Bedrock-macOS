@@ -1,0 +1,116 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:14 +0530
+Subject: [PATCH 09/21] xgameruntime: Implement security information queries
+ for URLs.
+
+---
+ .../GDKComponent/System/XNetworking.cpp       | 62 +++++++++++++++----
+ 1 file changed, 50 insertions(+), 12 deletions(-)
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/XNetworking.cpp b/dlls/xgameruntime/GDKComponent/System/XNetworking.cpp
+index 30d159c..0a38653 100644
+--- a/dlls/xgameruntime/GDKComponent/System/XNetworking.cpp
++++ b/dlls/xgameruntime/GDKComponent/System/XNetworking.cpp
+@@ -20,12 +20,54 @@
+  */
+ 
+ #include "../../private.h"
++#include <winhttp.h>
+ 
+ #include <cstring>
+ #include <atomic>
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(gdkc);
+ 
++/* LibHttpClient asks for the TLS settings and certificate
++ * pins of every URL before it connects. Answer with TLS 1.2 and 1.3 and no
++ * extra pins, so ordinary schannel certificate validation still applies. */
++static const SIZE_T security_info_size = sizeof(XNetworkingSecurityInformation);
++
++static HRESULT WINAPI SecurityInformationProvider( XAsyncOp op, const XAsyncProviderData *data )
++{
++    switch (op)
++    {
++        case XAsyncOp::Begin:
++            return ::XAsyncSchedule( data->async, 0 );
++        case XAsyncOp::DoWork:
++            ::XAsyncComplete( data->async, S_OK, security_info_size );
++            return S_OK;
++        case XAsyncOp::GetResult:
++        {
++            XNetworkingSecurityInformation *info = (XNetworkingSecurityInformation *)data->buffer;
++            info->enabledHttpSecurityProtocolFlags = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
++            info->thumbprintCount = 0;
++            info->thumbprints = nullptr;
++            return S_OK;
++        }
++        default:
++            return S_OK;
++    }
++}
++
++static HRESULT QuerySecurityInformation( const void *identity, XAsyncBlock *asyncBlock )
++{
++    return ::XAsyncBegin( asyncBlock, nullptr, identity, __func__, SecurityInformationProvider );
++}
++
++static HRESULT SecurityInformationResult( const void *identity, XAsyncBlock *asyncBlock, SIZE_T size, SIZE_T *used, UINT8 *buffer, XNetworkingSecurityInformation **info )
++{
++    HRESULT hr = ::XAsyncGetResult( asyncBlock, identity, size, buffer, used );
++    if ( SUCCEEDED(hr) && info ) *info = (XNetworkingSecurityInformation *)buffer;
++    return hr;
++}
++
++static const char security_identity_utf8 = 0, security_identity_utf16 = 0;
++
+ class XNetworkingImpl : 
+     public IXNetworkingImpl
+ {
+@@ -108,38 +150,34 @@ public:
+ 
+     HRESULT WINAPI XNetworkingQuerySecurityInformationForUrlAsync( LPCSTR url, XAsyncBlock *asyncBlock ) override
+     {
+-        FIXME( "url %p, asyncBlock %p stub!\n", url, asyncBlock );
+-        return E_NOTIMPL;
++        TRACE( "url %s, asyncBlock %p.\n", debugstr_a( url ), asyncBlock );
++        return QuerySecurityInformation( &security_identity_utf8, asyncBlock );
+     }
+ 
+     HRESULT WINAPI XNetworkingQuerySecurityInformationForUrlAsyncResultSize( XAsyncBlock *asyncBlock, SIZE_T *securityInformationBufferByteCount ) override
+     {
+-        FIXME( "asyncBlock %p, securityInformationBufferByteCount %p stub!\n", asyncBlock, securityInformationBufferByteCount );
+-        return E_NOTIMPL;
++        return ::XAsyncGetResultSize( asyncBlock, securityInformationBufferByteCount );
+     }
+ 
+     HRESULT WINAPI XNetworkingQuerySecurityInformationForUrlAsyncResult( XAsyncBlock *asyncBlock, SIZE_T securityInformationBufferByteCount, SIZE_T *securityInformationBufferByteCountUsed, UINT8 *securityInformationBuffer, XNetworkingSecurityInformation **securityInformation ) override
+     {
+-        FIXME( "asyncBlock %p, securityInformationBufferByteCount %lld, securityInformationBufferByteCountUsed %p, securityInformationBuffer %p, securityInformation %p stub!\n", asyncBlock, securityInformationBufferByteCount, securityInformationBufferByteCountUsed, securityInformationBuffer, securityInformation );
+-        return E_NOTIMPL;
++        return SecurityInformationResult( &security_identity_utf8, asyncBlock, securityInformationBufferByteCount, securityInformationBufferByteCountUsed, securityInformationBuffer, securityInformation );
+     }
+ 
+     HRESULT WINAPI XNetworkingQuerySecurityInformationForUrlUtf16Async( LPCWSTR url, XAsyncBlock *asyncBlock ) override
+     {
+-        FIXME( "url %p, asyncBlock %p stub!\n", url, asyncBlock );
+-        return E_NOTIMPL;
++        TRACE( "url %s, asyncBlock %p.\n", debugstr_w( url ), asyncBlock );
++        return QuerySecurityInformation( &security_identity_utf16, asyncBlock );
+     }
+ 
+     HRESULT WINAPI XNetworkingQuerySecurityInformationForUrlUtf16AsyncResultSize( XAsyncBlock *asyncBlock, SIZE_T *securityInformationBufferByteCount ) override
+     {
+-        FIXME( "asyncBlock %p, securityInformationBufferByteCount %p stub!\n", asyncBlock, securityInformationBufferByteCount );
+-        return E_NOTIMPL;
++        return ::XAsyncGetResultSize( asyncBlock, securityInformationBufferByteCount );
+     }
+ 
+     HRESULT WINAPI XNetworkingQuerySecurityInformationForUrlUtf16AsyncResult( XAsyncBlock *asyncBlock, SIZE_T securityInformationBufferByteCount, SIZE_T *securityInformationBufferByteCountUsed, UINT8 *securityInformationBuffer, XNetworkingSecurityInformation **securityInformation ) override
+     {
+-        TRACE( "asyncBlock %p, securityInformationBufferByteCount %lld, securityInformationBufferByteCountUsed %p, securityInformationBuffer %p, securityInformation %p stub!\n", asyncBlock, securityInformationBufferByteCount, securityInformationBufferByteCountUsed, securityInformationBuffer, securityInformation );
+-        return E_NOTIMPL;
++        return SecurityInformationResult( &security_identity_utf16, asyncBlock, securityInformationBufferByteCount, securityInformationBufferByteCountUsed, securityInformationBuffer, securityInformation );
+     }
+ 
+     HRESULT WINAPI XNetworkingVerifyServerCertificate( PVOID requestHandle, const XNetworkingSecurityInformation *securityInformation ) override
