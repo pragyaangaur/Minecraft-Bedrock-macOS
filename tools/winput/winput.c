@@ -9,6 +9,7 @@
 //   winput key <vk> [vk2 ...]      SendInput down+up for each virtual key code (decimal or 0x..)
 //   winput hold <ms> <vk> [vk2 ...] press all keys together, hold for ms, release (walk, sprint, jump)
 //   winput look <dx> <dy> [steps]  relative mouse move in mickeys, split into steps (turn the camera)
+//   winput mouse <l|r> <ms>        hold the left or right mouse button for ms (mine, place, use)
 // Fractions are decimals such as 0.77. Window class name: "Bedrock".
 
 typedef unsigned short WCHAR;
@@ -53,6 +54,8 @@ __declspec(dllimport) BOOL __stdcall PostMessageW(HWND, UINT, WPARAM, LPARAM);
 #define MOUSEEVENTF_MOVE 0x0001
 #define MOUSEEVENTF_LEFTDOWN 0x0002
 #define MOUSEEVENTF_LEFTUP 0x0004
+#define MOUSEEVENTF_RIGHTDOWN 0x0008
+#define MOUSEEVENTF_RIGHTUP 0x0010
 #define KEYEVENTF_KEYUP 0x0002
 #define WM_MOUSEMOVE 0x0200
 #define WM_LBUTTONDOWN 0x0201
@@ -183,7 +186,7 @@ static int run(WCHAR *cmdline) {
   p = next_token(p, cmd, sizeof cmd);
   if (!p) return 2;
   p = next_token(p, cmd, sizeof cmd);
-  if (!p || !cmd[0]) { out("usage: winput info | click x y | pmclick x y | key vk... | hold ms vk... | look dx dy [steps]\n"); return 2; }
+  if (!p || !cmd[0]) { out("usage: winput info | click x y | pmclick x y | key vk... | hold ms vk... | look dx dy [steps] | mouse l|r ms\n"); return 2; }
 
   HWND h = find_game();
   if (!h) return 1;
@@ -257,6 +260,21 @@ static int run(WCHAR *cmdline) {
       Sleep(16);
     }
     out("look sent\n");
+    return 0;
+  }
+
+  if (cmd[0] == 'm') {  // mouse <l|r> <ms>
+    p = next_token(p, a1, sizeof a1);
+    if (!p) return 2;
+    p = next_token(p, a2, sizeof a2);
+    long ms = p && a2[0] ? parse_num(a2) : 100;
+    int right = a1[0] == 'r';
+    SetForegroundWindow(h);
+    Sleep(100);
+    mouse(right ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_LEFTDOWN);
+    Sleep((DWORD)ms);
+    mouse(right ? MOUSEEVENTF_RIGHTUP : MOUSEEVENTF_LEFTUP);
+    out("mouse sent\n");
     return 0;
   }
 
