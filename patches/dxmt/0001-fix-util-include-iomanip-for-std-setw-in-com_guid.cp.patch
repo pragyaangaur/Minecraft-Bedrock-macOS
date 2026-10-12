@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:52 +0530
+Subject: [PATCH 1/2] fix(util): include iomanip for std::setw in com_guid.cpp
+
+---
+ src/util/com/com_guid.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/util/com/com_guid.cpp b/src/util/com/com_guid.cpp
+index 11bf4a7..296e12e 100644
+--- a/src/util/com/com_guid.cpp
++++ b/src/util/com/com_guid.cpp
+@@ -14,6 +14,7 @@
+ #include "com_guid.hpp"
+ 
+ #include "../thread.hpp"
++#include <iomanip>
+ #include "../log/log.hpp"
+ 
+ namespace dxmt {
