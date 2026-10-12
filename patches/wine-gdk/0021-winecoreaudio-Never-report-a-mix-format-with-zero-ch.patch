@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:23 +0530
+Subject: [PATCH 21/21] winecoreaudio: Never report a mix format with zero
+ channels.
+
+---
+ dlls/winecoreaudio.drv/coreaudio.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/dlls/winecoreaudio.drv/coreaudio.c b/dlls/winecoreaudio.drv/coreaudio.c
+index c7e0dc2..43a9e58 100644
+--- a/dlls/winecoreaudio.drv/coreaudio.c
++++ b/dlls/winecoreaudio.drv/coreaudio.c
+@@ -1065,6 +1065,22 @@ static NTSTATUS unix_get_mix_format(void *args)
+         params->fmt->dwChannelMask = get_channel_mask(params->fmt->Format.nChannels);
+     }
+ 
++    /* Never hand out a 0-channel format or a 0 channel mask.
++     * A virtual device such as BlackHole can report no usable layout, and a
++     * zero channel count later becomes a zero divisor in FMOD's mixer. */
++    if(params->fmt->Format.nChannels == 0){
++        WARN("Device reported 0 channels, falling back to stereo\n");
++        params->fmt->Format.nChannels = 2;
++    }
++    if(params->fmt->dwChannelMask == 0)
++        params->fmt->dwChannelMask = get_channel_mask(params->fmt->Format.nChannels);
++    if(params->fmt->dwChannelMask == 0){
++        WARN("No speaker mask for %u channels, falling back to stereo\n",
++             (unsigned int)params->fmt->Format.nChannels);
++        params->fmt->Format.nChannels = 2;
++        params->fmt->dwChannelMask = KSAUDIO_SPEAKER_STEREO;
++    }
++
+     addr.mSelector = kAudioDevicePropertyNominalSampleRate;
+     size = sizeof(Float64);
+     sc = AudioObjectGetPropertyData(dev_id, &addr, 0, NULL, &size, &rate);
