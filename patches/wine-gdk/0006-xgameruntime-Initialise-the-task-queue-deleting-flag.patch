@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:13 +0530
+Subject: [PATCH 06/21] xgameruntime: Initialise the task queue deleting flags.
+
+---
+ dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.h b/dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.h
+index 2c68e95..242b16c 100644
+--- a/dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.h
++++ b/dlls/xgameruntime/GDKComponent/System/Threading/XTaskQueue.h
+@@ -390,7 +390,7 @@ private:
+     std::atomic<uint64_t> m_nextId = { 0 };
+     std::atomic<bool> m_suspended = { false };
+     std::atomic<ULONG> m_refs{ 0 };
+-    std::atomic_flag m_deleting;
++    std::atomic_flag m_deleting = ATOMIC_FLAG_INIT; /* Was uninitialised before C++20 */
+ 
+     StaticArray<WaitRegistration*, PORT_WAIT_MAX> m_waits;
+     StaticArray<HANDLE, PORT_EVENT_MAX> m_events;
+@@ -600,7 +600,7 @@ private:
+     TaskQueuePortContextImpl m_completion;
+     XTaskQueueTestHooks* m_testHooks = nullptr;
+     std::atomic<ULONG> m_refs{ 0 };
+-    std::atomic_flag m_deleting;
++    std::atomic_flag m_deleting = ATOMIC_FLAG_INIT; /* Was uninitialised before C++20 */
+ 
+ #ifdef SUSPEND_API
+     SuspendResumeHandler m_suspendHandler;
