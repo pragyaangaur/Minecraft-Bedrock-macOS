@@ -8,6 +8,7 @@
 //   winput pmclick <xf> <yf>       PostMessage WM_LBUTTONDOWN/UP with client coords (no cursor move)
 //   winput key <vk> [vk2 ...]      SendInput down+up for each virtual key code (decimal or 0x..)
 //   winput hold <ms> <vk> [vk2 ...] press all keys together, hold for ms, release (walk, sprint, jump)
+//   winput look <dx> <dy> [steps]  relative mouse move in mickeys, split into steps (turn the camera)
 // Fractions are decimals such as 0.77. Window class name: "Bedrock".
 
 typedef unsigned short WCHAR;
@@ -49,6 +50,7 @@ __declspec(dllimport) BOOL __stdcall PostMessageW(HWND, UINT, WPARAM, LPARAM);
 
 #define INPUT_MOUSE 0
 #define INPUT_KEYBOARD 1
+#define MOUSEEVENTF_MOVE 0x0001
 #define MOUSEEVENTF_LEFTDOWN 0x0002
 #define MOUSEEVENTF_LEFTUP 0x0004
 #define KEYEVENTF_KEYUP 0x0002
@@ -181,7 +183,7 @@ static int run(WCHAR *cmdline) {
   p = next_token(p, cmd, sizeof cmd);
   if (!p) return 2;
   p = next_token(p, cmd, sizeof cmd);
-  if (!p || !cmd[0]) { out("usage: winput info | click x y | pmclick x y | key vk... | hold ms vk...\n"); return 2; }
+  if (!p || !cmd[0]) { out("usage: winput info | click x y | pmclick x y | key vk... | hold ms vk... | look dx dy [steps]\n"); return 2; }
 
   HWND h = find_game();
   if (!h) return 1;
@@ -230,6 +232,31 @@ static int run(WCHAR *cmdline) {
     Sleep((DWORD)ms);
     for (int i = n - 1; i >= 0; i--) key(vks[i], 1);
     out("held "); out_int(n); out(" keys for "); out_int(ms); out(" ms\n");
+    return 0;
+  }
+
+  if (cmd[0] == 'l' && cmd[1] == 'o') {  // look <dx> <dy> [steps]
+    char a3[16];
+    p = next_token(p, a1, sizeof a1);
+    if (!p) return 2;
+    p = next_token(p, a2, sizeof a2);
+    if (!p) return 2;
+    WCHAR *q = next_token(p, a3, sizeof a3);
+    long dx = parse_num(a1), dy = parse_num(a2), steps = q && a3[0] ? parse_num(a3) : 10;
+    if (steps < 1) steps = 1;
+    SetForegroundWindow(h);
+    Sleep(100);
+    for (long i = 0; i < steps; i++) {
+      INPUT in;
+      memset(&in, 0, sizeof in);
+      in.type = INPUT_MOUSE;
+      in.u.mi.dx = dx * (i + 1) / steps - dx * i / steps;
+      in.u.mi.dy = dy * (i + 1) / steps - dy * i / steps;
+      in.u.mi.dwFlags = MOUSEEVENTF_MOVE;
+      SendInput(1, &in, sizeof in);
+      Sleep(16);
+    }
+    out("look sent\n");
     return 0;
   }
 
