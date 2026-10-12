@@ -1,11 +1,14 @@
-"""Write a stand-in for game/data/skin_packs/vanilla.
+"""Write stand-ins for game/data/skin_packs/vanilla and game/data/skin_packs/persona.
 
 Usage: .venv/bin/python -I tools/make_skin_pack.py [java edition .jar]
 
 Only needed when the copy of the game is missing data/skin_packs. The game
 looks up its nine default skins as "c18e65aa-7b21-4637-9b63-8ad63622ef01.<Name>"
 (exe RVA 0x862b690). Without the vanilla pack the skin manager (0x140d960)
-returns null and the client crashes after joining a world.
+returns null and the client crashes after joining a world. The persona pack
+(uuid 5eb65f73-af11-448e-82aa-1b7b165316ad, set at 0x44d70e9) holds the slots
+that the persona skin registrar (0x4758c70) overwrites in place, so without it
+the local player is never drawn.
 
 Steve and Alex come from the game's own vanilla resource pack. The other seven
 default characters come from a Java Edition jar, because Java ships the same
@@ -24,6 +27,11 @@ NAMES = ["Steve", "Alex", "Noor", "Ari", "Sunny", "Makena", "Efe", "Zuri", "Kai"
 SLIM = {"Alex"}
 # Other names the game builds with the vanilla pack uuid (exe 0x862b690), using Steve's and Alex's art.
 EXTRA = {"Dummy": "steve.png", "Custom": "steve.png", "CustomSlim": "alex.png"}
+PERSONA_DIR = os.path.join(ROOT, "game/data/skin_packs/persona")
+PERSONA_UUID = "5eb65f73-af11-448e-82aa-1b7b165316ad"
+PERSONA_SLOTS = ["personaProfile", "personaProfile1", "personaProfile2", "personaProfile3",
+                 "personaProfile4", "personaProfile5", "personaProfileMultiplayer",
+                 "personaProfileTemporary", "personaProfileNotFound"]
 
 
 def brarchive(path):
@@ -69,3 +77,9 @@ for name, png in EXTRA.items():
                   "texture": png, "type": "free"})
 
 write_pack(OUT, "Standard", PACK_UUID, "d9b8a0e4-5ac0-4b6c-9a4b-1f3f2b7c9e10", skins)
+
+os.makedirs(PERSONA_DIR, exist_ok=True)
+open(os.path.join(PERSONA_DIR, "steve.png"), "wb").write(bedrock["steve.png"])
+write_pack(PERSONA_DIR, "Persona", PERSONA_UUID, "3c2f8d61-0b7e-4f5a-9d2c-6e1a4b8f7c05",
+           [{"localization_name": n, "geometry": "geometry.humanoid.custom", "texture": "steve.png",
+             "type": "free"} for n in PERSONA_SLOTS])
