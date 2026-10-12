@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:17 +0530
+Subject: [PATCH 13/21] winhttp: Queue an async receive response after the
+ request is sent.
+
+---
+ dlls/winhttp/request.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/dlls/winhttp/request.c b/dlls/winhttp/request.c
+index 64452f9..62664e6 100644
+--- a/dlls/winhttp/request.c
++++ b/dlls/winhttp/request.c
+@@ -3230,6 +3230,17 @@ static DWORD receive_response( struct request *request )
+         return queue_receive_response( request );
+ 
+     case REQUEST_STATE_REQUEST_SENT:
++        /* On Windows an async WinHttpReceiveResponse always returns at once and
++         * HEADERS_AVAILABLE arrives later from the callback thread, never nested inside the
++         * caller (e.g. XCurl calls it from the SENDREQUEST_COMPLETE callback and closes the
++         * request in the HEADERS_AVAILABLE handler). Queue it like the SENDING_REQUEST case. */
++        if (async)
++        {
++            request->state = REQUEST_STATE_READ_RESPONSE_QUEUED;
++            return queue_receive_response( request );
++        }
++        break;
++
+     case REQUEST_STATE_READ_RESPONSE_QUEUED:
+         break;
+ 
