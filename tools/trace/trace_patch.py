@@ -14,7 +14,8 @@ own import slot, so it shows up in Wine's +seh log. Run it with:
   EXE=build/game/Minecraft.Windows.trace.exe TAG=trace tools/run_wine.sh '+seh' 150
 and search the log for "trace id=".
 
-The hooks follow the skin lookup in the skin manager (0x140d960).
+The default hooks follow the skin lookup in the skin manager (0x140d960).
+tools/trace/hooks_extra.py adds more.
 """
 import struct, subprocess, sys, os, pefile
 
@@ -40,6 +41,10 @@ HOOKS = [
     (6, 0x140da53, ["mov rcx, qword ptr [rdi + 8]", "mov rax, qword ptr [rcx]"], 7, None),
     (7, 0x140da6a, ["nop", "add rsp, 0x68"], 5, None),
 ]
+# More hooks live in hooks_extra.py next to this file.
+sys.path.insert(0, HERE)
+from hooks_extra import HOOKS as EXTRA
+HOOKS += EXTRA
 
 PRO = """
   pushfq

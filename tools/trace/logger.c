@@ -59,6 +59,24 @@ __attribute__((section(".text$zz"))) void logger(u32 id, struct regs *r) {
         p = kv(p, "final", r->rax);
         if (r->rax) { p = kv(p, "state1b8", rd32(r->rax, 0x1b8)); p = kv(p, "vt", rd(r->rax, 0)); }
         break; }
+    case 10: {  /* registrar entry */
+        u64 pr = r->rdx;
+        p = kv(p, "profile", pr); p = kv(p, "type9c0", rd(pr, 0x9c0) & 0xff); p = kv(p, "f971", rd(pr, 0x971) & 0xff);
+        p = kv(p, "idx9e4", rd32(pr, 0x9e4)); p = kv(p, "ret", rd((u64)r + 16 * 8, 0));
+        break; }
+    case 8: {  /* after persona pack lookup */
+        u64 pk = r->rax, pr = r->rsi;
+        p = kv(p, "pack", pk); p = kv(p, "type9c0", rd(pr, 0x9c0) & 0xff); p = kv(p, "f971", rd(pr, 0x971) & 0xff);
+        p = kv(p, "idx9e4", rd32(pr, 0x9e4));
+        if (pk) { u64 b = rd(pk, 0x88), e = rd(pk, 0x90); p = kv(p, "nslots", (e - b) / 0x228);
+            for (int i = 0; i < 10 && b + i * 0x228 < e; i++) { p = kv(p, "slot", rd32(b + i * 0x228, 0x1e0)); } }
+        break; }
+    case 9: {  /* replace slot */
+        u64 pk = r->rcx, b = rd(pk, 0x88), e = rd(pk, 0x90);
+        p = kv(p, "pack", pk); p = kv(p, "index", r->r8 & 0xffffffff); p = kv(p, "nslots", (e - b) / 0x228);
+        for (int i = 0; i < 10 && b + i * 0x228 < e; i++) { p = kv(p, "slot", rd32(b + i * 0x228, 0x1e0)); }
+        p = kv(p, "ret", rd((u64)r + 16 * 8, 0));
+        break; }
     default:
         p = kv(p, "rax", r->rax); p = kv(p, "rcx", r->rcx); p = kv(p, "rdx", r->rdx); p = kv(p, "rbx", r->rbx);
         p = kv(p, "rsi", r->rsi); p = kv(p, "rdi", r->rdi); p = kv(p, "r8", r->r8); p = kv(p, "r9", r->r9);
