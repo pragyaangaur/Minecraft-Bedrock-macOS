@@ -23,7 +23,11 @@ Copy the whole folder, about 2 GB. Windows refuses to copy `Minecraft.Windows.ex
 
 ## 3. Move both to the Mac
 
-An external drive formatted as exFAT works well, because the dump is larger than the 4 GB limit of FAT32 drives. Put the folder and the dump anywhere on the Mac, then run the setup:
+An external drive formatted as exFAT works well, because the dump is larger than the 4 GB limit of FAT32 drives. Put the folder and the dump anywhere on the Mac.
+
+If you use Bedrock Launcher, open it and choose the folder and the dump when it asks. It copies the game into `~/Library/Application Support/Bedrock Launcher`, so you can delete both copies once the game has started. The rest of this page is for building from source.
+
+If you built from source, run the setup:
 
 ```bash
 ./setup.sh --game "/path/to/the/copied/folder" --dump "/path/to/Minecraft.Windows.exe_....dmp"
