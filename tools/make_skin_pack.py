@@ -11,17 +11,17 @@ that the persona skin registrar (0x4758c70) overwrites in place, so without it
 the local player is never drawn.
 
 Steve and Alex come from the game's own vanilla resource pack. The other seven
-default characters come from a Java Edition jar, because Java ships the same
-art.
+default characters come from a Java Edition jar if one is given or found in
+~/Library/Application Support/minecraft/versions, because Java ships the same
+art. Without a jar they reuse Steve's art.
 A real copy of the folders from the Windows install replaces all of this.
 """
-import json, os, struct, sys, zipfile
+import glob, json, os, struct, sys, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "game/data/skin_packs/vanilla")
 BRARCHIVE = os.path.join(ROOT, "game/data/resource_packs/vanilla/__brarchive/textures/entity.brarchive")
-JAR = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(
-    "~/Library/Application Support/minecraft/versions/26.3/26.3.jar")
+VERSIONS = os.path.expanduser("~/Library/Application Support/minecraft/versions")
 PACK_UUID = "c18e65aa-7b21-4637-9b63-8ad63622ef01"
 NAMES = ["Steve", "Alex", "Noor", "Ari", "Sunny", "Makena", "Efe", "Zuri", "Kai"]
 SLIM = {"Alex"}
@@ -49,6 +49,27 @@ def brarchive(path):
     return out
 
 
+def find_jar():
+    if len(sys.argv) > 1:
+        return sys.argv[1]
+
+    def has_art(path):
+        try:
+            return "assets/minecraft/textures/entity/player/wide/ari.png" in zipfile.ZipFile(path).namelist()
+        except (OSError, zipfile.BadZipFile):
+            return False
+
+    jars = [j for j in glob.glob(os.path.join(VERSIONS, "*", "*.jar")) if has_art(j)]
+    return max(jars, key=os.path.getmtime) if jars else None
+
+
+def java_art(jar, arm, png):
+    try:
+        return jar.read(f"assets/minecraft/textures/entity/player/{arm}/{png}") if jar else None
+    except KeyError:
+        return None
+
+
 def write_pack(path, name, uuid, module_uuid, entries):
     json.dump({"skins": entries, "serialize_name": name, "localization_name": name},
               open(os.path.join(path, "skins.json"), "w"), indent=2)
@@ -61,12 +82,14 @@ def write_pack(path, name, uuid, module_uuid, entries):
 
 os.makedirs(OUT, exist_ok=True)
 bedrock = brarchive(BRARCHIVE)
-jar = zipfile.ZipFile(JAR)
+jar_path = find_jar()
+jar = zipfile.ZipFile(jar_path) if jar_path else None
+print("default character art from", jar_path or "Steve's skin (no Java Edition jar found)")
 skins = []
 for name in NAMES:
     png = name.lower() + ".png"
     arm = "slim" if name in SLIM else "wide"
-    data = bedrock.get(png) or jar.read(f"assets/minecraft/textures/entity/player/{arm}/{png}")
+    data = bedrock.get(png) or java_art(jar, arm, png) or bedrock["steve.png"]
     open(os.path.join(OUT, png), "wb").write(data)
     skins.append({"localization_name": name,
                   "geometry": "geometry.humanoid.customSlim" if arm == "slim" else "geometry.humanoid.custom",
