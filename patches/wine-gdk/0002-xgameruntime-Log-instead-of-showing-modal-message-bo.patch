@@ -1,0 +1,34 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:12 +0530
+Subject: [PATCH 02/21] xgameruntime: Log instead of showing modal message
+ boxes.
+
+---
+ dlls/xgameruntime/main.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/dlls/xgameruntime/main.c b/dlls/xgameruntime/main.c
+index 72dba13..dc5096c 100644
+--- a/dlls/xgameruntime/main.c
++++ b/dlls/xgameruntime/main.c
+@@ -51,7 +51,8 @@ static HRESULT LoadUnixLib()
+     if ( nts == STATUS_CONNECTION_REFUSED )
+     {
+         WARN("Failed to do unix call %s\n", "conn_socket");
+-        MessageBoxA( NULL, "Could not load Xodus's service socket.\nXbox account functionality will be missing.\n", "Attention Required!", MB_ICONEXCLAMATION );
++        /* Log instead of a modal box nobody is there to click. */
++        WARN( "Could not load Xodus's service socket. Xbox account functionality will be missing.\n" );
+         return HRESULT_FROM_NT( nts );
+     }
+     else if ( FAILED( nts ) )
+@@ -256,7 +257,8 @@ HRESULT WINAPI QueryApiImpl( const GUID *runtimeClassId, REFIID interfaceId, voi
+             LoadOtherRuntime( &asked );
+             if ( !asked )
+             {
+-                MessageBoxA( NULL, "The game has requested XThreading\nIt's recommended that you use Microsoft's native binary for this instead.\nTo do so, copy xgameruntime.dll from a Windows machine and place it under the name \"xgameruntime.dll.threading\" within either the game's binaries or within your prefix's system32 folder.\nYou won't be asked this again.", "Attention Required!", MB_ICONEXCLAMATION );
++                /* Log instead of a modal box. */
++                WARN( "The game has requested XThreading; using the built-in implementation.\n" );
+             }
+             return IXThreadingImpl_QueryInterface( x_threading_impl, interfaceId, out );
+         }
