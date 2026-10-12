@@ -11,6 +11,7 @@
 //   winput look <dx> <dy> [steps]  relative mouse move in mickeys, split into steps (turn the camera)
 //   winput mouse <l|r> <ms>        hold the left or right mouse button for ms (mine, place, use)
 //   winput wheel <notches>         scroll the mouse wheel (negative scrolls down)
+//   winput type <text>             type text as Unicode characters (chat, commands); _ stands for a space
 // Fractions are decimals such as 0.77. Window class name: "Bedrock".
 
 typedef unsigned short WCHAR;
@@ -59,6 +60,7 @@ __declspec(dllimport) BOOL __stdcall PostMessageW(HWND, UINT, WPARAM, LPARAM);
 #define MOUSEEVENTF_RIGHTUP 0x0010
 #define MOUSEEVENTF_WHEEL 0x0800
 #define KEYEVENTF_KEYUP 0x0002
+#define KEYEVENTF_UNICODE 0x0004
 #define WM_MOUSEMOVE 0x0200
 #define WM_LBUTTONDOWN 0x0201
 #define WM_LBUTTONUP 0x0202
@@ -188,7 +190,7 @@ static int run(WCHAR *cmdline) {
   p = next_token(p, cmd, sizeof cmd);
   if (!p) return 2;
   p = next_token(p, cmd, sizeof cmd);
-  if (!p || !cmd[0]) { out("usage: winput info | click x y | pmclick x y | key vk... | hold ms vk... | look dx dy [steps] | mouse l|r ms | wheel n\n"); return 2; }
+  if (!p || !cmd[0]) { out("usage: winput info | click x y | pmclick x y | key vk... | hold ms vk... | look dx dy [steps] | mouse l|r ms | wheel n | type text\n"); return 2; }
 
   HWND h = find_game();
   if (!h) return 1;
@@ -262,6 +264,26 @@ static int run(WCHAR *cmdline) {
       Sleep(16);
     }
     out("look sent\n");
+    return 0;
+  }
+
+  if (cmd[0] == 't') {  // type <text>
+    p = next_token(p, a1, sizeof a1);
+    if (!p) return 2;
+    SetForegroundWindow(h);
+    Sleep(100);
+    for (char *c = a1; *c; c++) {
+      for (int up = 0; up < 2; up++) {
+        INPUT in;
+        memset(&in, 0, sizeof in);
+        in.type = INPUT_KEYBOARD;
+        in.u.ki.wScan = (WORD)(*c == '_' ? ' ' : *c);
+        in.u.ki.dwFlags = KEYEVENTF_UNICODE | (up ? KEYEVENTF_KEYUP : 0);
+        SendInput(1, &in, sizeof in);
+        Sleep(30);
+      }
+    }
+    out("typed\n");
     return 0;
   }
 
