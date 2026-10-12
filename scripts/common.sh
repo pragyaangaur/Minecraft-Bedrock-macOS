@@ -28,6 +28,10 @@ DXMT_TAG="v0.80"
 LLVM_URL="https://github.com/llvm/llvm-project.git"
 LLVM_TAG="llvmorg-15.0.7"
 
+# The Mac app ships a standalone Python for the game preparation tools.
+PYTHON_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.12.15%2B20261009-aarch64-apple-darwin-install_only_stripped.tar.gz"
+PYTHON_SHA256="233f8e15255b3e1d1fd47ea5dd5230dfed803f371138e896e54d98c60ae19f6f"
+
 # Wine runs as x86_64 under Rosetta 2, so its dependencies must be x86_64 too.
 # Each entry is the URL and the SHA-256 of a tarball whose GPG signature was checked.
 DEPS=(
