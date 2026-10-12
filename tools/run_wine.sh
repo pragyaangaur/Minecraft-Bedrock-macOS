@@ -1,12 +1,13 @@
 #!/bin/zsh
 # Run the game once under WineGDK and write Wine's output to a log in out/.
 #
-# Usage: [PREFIX=dir] [TAG=name] [EXE=file] [XCURL=hang]
+# Usage: [PREFIX=dir] [TAG=name] [EXE=file] [XCURL=hang] [AUDIO=off]
 #        tools/run_wine.sh [WINEDEBUG channels] [seconds before the game is stopped]
 #
 # PREFIX picks another Wine prefix (the default is prefix/). TAG is added to
 # the log name. EXE runs another rebuilt executable, such as the trace build.
-# XCURL=hang uses the offline XCurl whose requests never complete.
+# XCURL=hang uses the offline XCurl whose requests never complete. AUDIO=off
+# disables Wine's CoreAudio driver, so the game sees no sound device.
 #
 # drive_c/Minecraft is rebuilt on each run from symlinks into game/, with the
 # rebuilt executable from build/game and the stand-in DLLs
@@ -45,7 +46,7 @@ done
 
 # Prefer DXMT's Direct3D DLLs, never start the debugger on a crash, and skip
 # the Mono and Gecko installers.
-export WINEDLLOVERRIDES="d3d11,dxgi,d3d10core=n,b;winedbg.exe=d;mscoree,mshtml=${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
+export WINEDLLOVERRIDES="d3d11,dxgi,d3d10core=n,b;winedbg.exe=d;mscoree,mshtml=${AUDIO:+;winecoreaudio.drv=d}${WINEDLLOVERRIDES:+;$WINEDLLOVERRIDES}"
 WINEDEBUG=-all arch -x86_64 $wine reg delete 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug' /v Debugger /f > /dev/null 2>&1 || true
 
 mkdir -p "$LOGS"
