@@ -109,6 +109,12 @@ To build the app and the disk image from your build, run `scripts/build-app.sh`.
 | `site/` | The project website, published with GitHub Pages |
 | `docs/` | How to get the game files and how the port works |
 
+## Contributing
+
+Bug reports and pull requests are welcome. When you report a bug, say which Mac and macOS version you use and attach the newest log from `~/Library/Application Support/Bedrock Launcher/out` (or `out/` if you built from source). Never attach your memory dump or any game files, because the dump can contain sign-in tokens and the game files are Mojang's.
+
+Keep each pull request to one fix and use [Conventional Commits](https://www.conventionalcommits.org) for the messages. A change to Wine goes in as a new numbered patch in `patches/wine-gdk`, made with `git format-patch` in `build/src/wine-gdk`, so that a fresh `./setup.sh` picks it up. Help with other versions of the game is especially useful, because the tools contain addresses that only match version 1.26.52.
+
 ## Licence
 
 The scripts, tools and stubs in this repository are under the MIT licence in [LICENSE](LICENSE). The patches in `patches/wine-gdk` change WineGDK and fall under its LGPL 2.1 licence. The patches in `patches/dxmt` change DXMT and fall under its MIT licence. The app bundles builds of Wine, GnuTLS, Nettle, GMP, FreeType, DXMT and Python, and their licence texts are in `Contents/Resources/licenses` inside the app. Minecraft is a trademark of Mojang Synergies AB, and this project is not affiliated with Mojang or Microsoft.
