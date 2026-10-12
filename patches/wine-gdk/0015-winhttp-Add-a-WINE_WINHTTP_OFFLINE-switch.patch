@@ -1,0 +1,28 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:18 +0530
+Subject: [PATCH 15/21] winhttp: Add a WINE_WINHTTP_OFFLINE switch.
+
+---
+ dlls/winhttp/request.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/dlls/winhttp/request.c b/dlls/winhttp/request.c
+index fbe6aae..39efffc 100644
+--- a/dlls/winhttp/request.c
++++ b/dlls/winhttp/request.c
+@@ -2006,6 +2006,14 @@ static DWORD open_connection( struct request *request )
+ 
+     if (request->netconn) goto done;
+ 
++    /* WINE_WINHTTP_OFFLINE=1 makes every connection fail the way
++     * it does on a PC with no network, for testing a game's offline path. */
++    if (_wgetenv( L"WINE_WINHTTP_OFFLINE" ))
++    {
++        TRACE( "offline mode, refusing connection\n" );
++        return ERROR_WINHTTP_CANNOT_CONNECT;
++    }
++
+     connect = request->connect;
+     port = connect->serverport ? connect->serverport : (request->hdr.flags & WINHTTP_FLAG_SECURE ? 443 : 80);
+ 
