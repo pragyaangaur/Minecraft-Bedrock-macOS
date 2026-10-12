@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:12 +0530
+Subject: [PATCH 04/21] xgameruntime: Return a stable app-specific device id.
+
+---
+ .../GDKComponent/System/XSystem.cpp           | 43 +++++++++++++++++--
+ 1 file changed, 40 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/XSystem.cpp b/dlls/xgameruntime/GDKComponent/System/XSystem.cpp
+index 0752611..c770957 100644
+--- a/dlls/xgameruntime/GDKComponent/System/XSystem.cpp
++++ b/dlls/xgameruntime/GDKComponent/System/XSystem.cpp
+@@ -122,9 +122,46 @@ public:
+     }
+ 
+     HRESULT WINAPI XSystemGetAppSpecificDeviceId( INT32 appSpecificDeviceIdSize, LPSTR appSpecificDeviceId, SIZE_T *appSpecificDeviceIdUsed ) override
+-    {    
+-        FIXME( "appSpecificDeviceIdSize %d, appSpecificDeviceId %p, appSpecificDeviceIdUsed %p stub!\n", appSpecificDeviceIdSize, appSpecificDeviceId, appSpecificDeviceIdUsed );
+-        return E_NOTIMPL;
++    {
++        /* Windows returns 44 base64 characters of a 32-byte
++         * per-device, per-title hash. Derive one from the computer name and
++         * executable path with FNV-1a so it is stable on this machine. */
++        static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
++        WCHAR name[MAX_COMPUTERNAME_LENGTH + 1 + MAX_PATH] = {0};
++        DWORD len = MAX_COMPUTERNAME_LENGTH + 1;
++        unsigned char hash[33] = {0};
++        char id[45];
++        UINT64 h = 0xcbf29ce484222325ull;
++
++        TRACE( "appSpecificDeviceIdSize %d, appSpecificDeviceId %p, appSpecificDeviceIdUsed %p\n", appSpecificDeviceIdSize, appSpecificDeviceId, appSpecificDeviceIdUsed );
++
++        if ( appSpecificDeviceIdSize < XSystemAppSpecificDeviceIdBytes )
++            return HRESULT_FROM_WIN32( ERROR_INSUFFICIENT_BUFFER );
++
++        GetComputerNameW( name, &len );
++        GetModuleFileNameW( NULL, name + len, MAX_PATH );
++        for ( int block = 0; block < 4; block++ )
++        {
++            for ( const WCHAR *c = name; *c; c++ ) h = ( h ^ *c ) * 0x100000001b3ull;
++            h = ( h ^ block ) * 0x100000001b3ull;
++            for ( int i = 0; i < 8; i++ ) hash[block * 8 + i] = (unsigned char)( h >> ( 8 * i ) );
++        }
++        for ( int i = 0, j = 0; i < 33; i += 3 )
++        {
++            UINT32 v = ( hash[i] << 16 ) | ( hash[i + 1] << 8 ) | hash[i + 2];
++            id[j++] = b64[( v >> 18 ) & 63];
++            id[j++] = b64[( v >> 12 ) & 63];
++            id[j++] = b64[( v >> 6 ) & 63];
++            id[j++] = b64[v & 63];
++        }
++        id[43] = '=';
++        id[44] = 0;
++
++        if ( appSpecificDeviceIdUsed )
++            *appSpecificDeviceIdUsed = sizeof(id);
++        if ( appSpecificDeviceId )
++            lstrcpynA( appSpecificDeviceId, id, appSpecificDeviceIdSize );
++        return S_OK;
+     }
+ 
+     /* Handle tracking is a debugging aid. Accept the callback and never call it. */
