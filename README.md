@@ -47,6 +47,10 @@ You need a Mac with Apple silicon and a copy of Minecraft for Windows version 1.
 - The game pauses when its window loses focus, as it does on Windows.
 - Only version 1.26.52 of the game has been tested.
 
+## How it was made
+
+The whole port was reverse engineered by Claude Opus 5.5, which ran a swarm of Opus 5.5, Sonnet 5.5 and Haiku 5.5 agents. The agents rebuilt the encrypted executable from a memory dump, ran the game under Wine with exception logging, and read the code around each crash with disassembly scripts guided by the assertion strings left in the binary. Every crash was traced to its cause and fixed in WineGDK, Wine or a small stand-in DLL, and Haiku agents played the game to test each fix.
+
 ## For developers
 
 ### Build from source
