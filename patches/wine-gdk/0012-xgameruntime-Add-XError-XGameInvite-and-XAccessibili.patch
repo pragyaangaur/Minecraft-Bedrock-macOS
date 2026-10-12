@@ -1,0 +1,493 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:16 +0530
+Subject: [PATCH 12/21] xgameruntime: Add XError, XGameInvite and
+ XAccessibility.
+
+---
+ .../System/XErrorInviteAccessibility.cpp      | 384 ++++++++++++++++++
+ .../System/XErrorInviteAccessibility.h        |  36 ++
+ dlls/xgameruntime/Makefile.in                 |   1 +
+ dlls/xgameruntime/main.c                      |  16 +
+ 4 files changed, 437 insertions(+)
+ create mode 100644 dlls/xgameruntime/GDKComponent/System/XErrorInviteAccessibility.cpp
+ create mode 100644 dlls/xgameruntime/GDKComponent/System/XErrorInviteAccessibility.h
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/XErrorInviteAccessibility.cpp b/dlls/xgameruntime/GDKComponent/System/XErrorInviteAccessibility.cpp
+new file mode 100644
+index 0000000..cc31d90
+--- /dev/null
++++ b/dlls/xgameruntime/GDKComponent/System/XErrorInviteAccessibility.cpp
+@@ -0,0 +1,384 @@
++/*
++ * Xbox Game runtime Library
++ *  GDK Component: System API -> XError, XGameInvite, XAccessibility
++ *
++ * Each class answers only the methods the game
++ * calls, with honest behaviour:
++ *  - XError: the callback and options are stored and accepted. This runtime
++ *    never reports errors through them, so the callback is never called.
++ *  - XGameInvite: registration returns a token. Invites are never delivered,
++ *    so the callback never fires.
++ *  - XAccessibility: closed captions and high contrast report off (the
++ *    stored caption flag is returned as is). Speech calls return E_NOTIMPL.
++ * Unanswered slots return E_NOTIMPL and log their vtable index.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#include "../../private.h"
++#include "XErrorInviteAccessibility.h"
++
++#include <atomic>
++#include <mutex>
++#include <utility>
++#include <vector>
++
++WINE_DEFAULT_DEBUG_CHANNEL(gdkc);
++
++typedef HRESULT ( WINAPI *ViStubFn )( void );
++
++/* One stub per unanswered slot, so the log names the vtable index. */
++template <unsigned int N>
++static HRESULT WINAPI ViUnimplemented( void )
++{
++    FIXME( "vtable slot %u not implemented, returning E_NOTIMPL.\n", N );
++    return E_NOTIMPL;
++}
++
++template <unsigned int Base, size_t... I>
++static void FillStubs( ViStubFn *stubs, std::index_sequence<I...> )
++{
++    ( ( stubs[I] = &ViUnimplemented<Base + (unsigned int)I> ), ... );
++}
++
++/* ---------------------------------------------------------------- XError */
++
++/* IXErrorImpl (8ca467f7): slot 3 is padding, 4 XErrorSetCallback, 5 XErrorSetOptions. */
++struct XErrorImplObj;
++
++struct XErrorImplVtbl
++{
++    HRESULT ( WINAPI *QueryInterface )( XErrorImplObj *, REFIID, void ** ); /* 0 */
++    ULONG   ( WINAPI *AddRef )( XErrorImplObj * );                          /* 1 */
++    ULONG   ( WINAPI *Release )( XErrorImplObj * );                         /* 2 */
++    ViStubFn padding;                                                       /* 3 */
++    void    ( WINAPI *XErrorSetCallback )( XErrorImplObj *, void ( WINAPI * )( HRESULT, const char *, void * ), void * ); /* 4 */
++    void    ( WINAPI *XErrorSetOptions )( XErrorImplObj *, UINT32, UINT32 ); /* 5 */
++};
++
++struct XErrorImplObj
++{
++    const XErrorImplVtbl *lpVtbl;
++    std::atomic_long ref{ 1 };
++    void ( WINAPI *callback )( HRESULT, const char *, void * ) = nullptr;
++    void *context = nullptr;
++    UINT32 optionsDebuggerPresent = 0;
++    UINT32 optionsDebuggerNotPresent = 0;
++};
++
++static HRESULT WINAPI XErrorImpl_QueryInterface( XErrorImplObj *self, REFIID iid, void **out )
++{
++    TRACE( "iface %p, iid %s, out %p.\n", self, debugstr_guid( &iid ), out );
++
++    if ( !out ) return E_POINTER;
++    *out = nullptr;
++    if ( IsEqualGUID( iid, IID_IUnknown ) || IsEqualGUID( iid, CLSID_XErrorImpl ) )
++    {
++        self->ref++;
++        *out = self;
++        return S_OK;
++    }
++    FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( &iid ) );
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI XErrorImpl_AddRef( XErrorImplObj *self )
++{
++    return static_cast<ULONG>( ++self->ref );
++}
++
++static ULONG WINAPI XErrorImpl_Release( XErrorImplObj *self )
++{
++    return static_cast<ULONG>( --self->ref );
++}
++
++static void WINAPI XErrorImpl_SetCallback( XErrorImplObj *self, void ( WINAPI *callback )( HRESULT, const char *, void * ), void *context )
++{
++    TRACE( "iface %p, callback %p, context %p.\n", self, callback, context );
++    self->callback = callback;
++    self->context = context;
++}
++
++static void WINAPI XErrorImpl_SetOptions( XErrorImplObj *self, UINT32 optionsDebuggerPresent, UINT32 optionsDebuggerNotPresent )
++{
++    TRACE( "iface %p, present %#x, not present %#x.\n", self, optionsDebuggerPresent, optionsDebuggerNotPresent );
++    self->optionsDebuggerPresent = optionsDebuggerPresent;
++    self->optionsDebuggerNotPresent = optionsDebuggerNotPresent;
++}
++
++static XErrorImplVtbl xerror_vtbl =
++{
++    XErrorImpl_QueryInterface,
++    XErrorImpl_AddRef,
++    XErrorImpl_Release,
++    nullptr,
++    XErrorImpl_SetCallback,
++    XErrorImpl_SetOptions,
++};
++
++static XErrorImplObj g_x_error = { &xerror_vtbl };
++
++HRESULT XErrorImplQueryInterface( REFIID iid, void **out )
++{
++    static bool filled = false;
++    if ( !filled )
++    {
++        xerror_vtbl.padding = &ViUnimplemented<3>;
++        filled = true;
++    }
++    return XErrorImpl_QueryInterface( &g_x_error, iid, out );
++}
++
++/* ----------------------------------------------------------- XGameInvite */
++
++/* IXGameInviteImpl (0651aae2): slots 3..4. IXGameInviteImpl2 (014d1cc3) adds 5..7. */
++struct XGameInviteImplObj;
++
++struct XGameInviteImplVtbl
++{
++    HRESULT ( WINAPI *QueryInterface )( XGameInviteImplObj *, REFIID, void ** ); /* 0 */
++    ULONG   ( WINAPI *AddRef )( XGameInviteImplObj * );                          /* 1 */
++    ULONG   ( WINAPI *Release )( XGameInviteImplObj * );                         /* 2 */
++    HRESULT ( WINAPI *XGameInviteRegisterForEvent )( XGameInviteImplObj *, void *, void *, void ( WINAPI * )( void *, const char * ), XTaskQueueRegistrationToken * ); /* 3 */
++    BOOLEAN ( WINAPI *XGameInviteUnregisterForEvent )( XGameInviteImplObj *, XTaskQueueRegistrationToken, BOOLEAN ); /* 4 */
++    HRESULT ( WINAPI *XGameInviteRegisterForPendingEvent )( XGameInviteImplObj *, void *, void *, void ( WINAPI * )( void *, const char * ), XTaskQueueRegistrationToken * ); /* 5 */
++    BOOLEAN ( WINAPI *XGameInviteUnregisterForPendingEvent )( XGameInviteImplObj *, XTaskQueueRegistrationToken, BOOLEAN ); /* 6 */
++    HRESULT ( WINAPI *XGameInviteAcceptPendingInvite )( XGameInviteImplObj *, const char * ); /* 7 */
++};
++
++struct XGameInviteImplObj
++{
++    const XGameInviteImplVtbl *lpVtbl;
++    std::atomic_long ref{ 1 };
++    std::mutex lock;
++    std::vector<UINT64> tokens;
++    UINT64 nextToken = 1;
++};
++
++static const GUID iid2 = { 0x014d1cc3, 0xbcfe, 0x41ff, { 0xb2, 0xf0, 0xe1, 0xef, 0x07, 0x15, 0x58, 0x28 } }; /* IXGameInviteImpl2 */
++
++static HRESULT WINAPI XGameInviteImpl_QueryInterface( XGameInviteImplObj *self, REFIID iid, void **out )
++{
++    TRACE( "iface %p, iid %s, out %p.\n", self, debugstr_guid( &iid ), out );
++
++    if ( !out ) return E_POINTER;
++    *out = nullptr;
++    if ( IsEqualGUID( iid, IID_IUnknown ) || IsEqualGUID( iid, CLSID_XGameInviteImpl )
++         || IsEqualGUID( iid, iid2 ) )
++    {
++        self->ref++;
++        *out = self;
++        return S_OK;
++    }
++    FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( &iid ) );
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI XGameInviteImpl_AddRef( XGameInviteImplObj *self )
++{
++    return static_cast<ULONG>( ++self->ref );
++}
++
++static ULONG WINAPI XGameInviteImpl_Release( XGameInviteImplObj *self )
++{
++    return static_cast<ULONG>( --self->ref );
++}
++
++/* Registration hands out a token and remembers it. No invite is ever delivered
++ * by this runtime, so the callback is stored and never called. */
++static HRESULT RegisterToken( XGameInviteImplObj *self, bool hasCallback, XTaskQueueRegistrationToken *token )
++{
++    if ( !hasCallback || !token ) return E_INVALIDARG;
++    std::lock_guard<std::mutex> guard( self->lock );
++    token->token = self->nextToken++;
++    self->tokens.push_back( token->token );
++    return S_OK;
++}
++
++static BOOLEAN UnregisterToken( XGameInviteImplObj *self, XTaskQueueRegistrationToken token )
++{
++    std::lock_guard<std::mutex> guard( self->lock );
++    for ( auto it = self->tokens.begin(); it != self->tokens.end(); ++it )
++    {
++        if ( *it == token.token )
++        {
++            self->tokens.erase( it );
++            return TRUE;
++        }
++    }
++    return FALSE;
++}
++
++static HRESULT WINAPI XGameInviteImpl_RegisterForEvent( XGameInviteImplObj *self, void *queue, void *context, void ( WINAPI *callback )( void *, const char * ), XTaskQueueRegistrationToken *token )
++{
++    TRACE( "iface %p, queue %p, context %p, callback %p, token %p.\n", self, queue, context, callback, token );
++    return RegisterToken( self, callback != nullptr, token );
++}
++
++static BOOLEAN WINAPI XGameInviteImpl_UnregisterForEvent( XGameInviteImplObj *self, XTaskQueueRegistrationToken token, BOOLEAN wait )
++{
++    TRACE( "iface %p, token %#llx, wait %d.\n", self, (unsigned long long)token.token, wait );
++    return UnregisterToken( self, token );
++}
++
++static HRESULT WINAPI XGameInviteImpl_RegisterForPendingEvent( XGameInviteImplObj *self, void *queue, void *context, void ( WINAPI *callback )( void *, const char * ), XTaskQueueRegistrationToken *token )
++{
++    TRACE( "iface %p, queue %p, context %p, callback %p, token %p.\n", self, queue, context, callback, token );
++    return RegisterToken( self, callback != nullptr, token );
++}
++
++static BOOLEAN WINAPI XGameInviteImpl_UnregisterForPendingEvent( XGameInviteImplObj *self, XTaskQueueRegistrationToken token, BOOLEAN wait )
++{
++    TRACE( "iface %p, token %#llx, wait %d.\n", self, (unsigned long long)token.token, wait );
++    return UnregisterToken( self, token );
++}
++
++static HRESULT WINAPI XGameInviteImpl_AcceptPendingInvite( XGameInviteImplObj *self, const char *inviteUri )
++{
++    /* No invite is ever pending in this runtime, so there is nothing to accept. */
++    WARN( "iface %p, uri %p: no pending invite is available.\n", self, inviteUri );
++    return E_NOTIMPL;
++}
++
++static XGameInviteImplVtbl xgameinvite_vtbl =
++{
++    XGameInviteImpl_QueryInterface,
++    XGameInviteImpl_AddRef,
++    XGameInviteImpl_Release,
++    XGameInviteImpl_RegisterForEvent,
++    XGameInviteImpl_UnregisterForEvent,
++    XGameInviteImpl_RegisterForPendingEvent,
++    XGameInviteImpl_UnregisterForPendingEvent,
++    XGameInviteImpl_AcceptPendingInvite,
++};
++
++static XGameInviteImplObj g_x_game_invite = { &xgameinvite_vtbl };
++
++HRESULT XGameInviteImplQueryInterface( REFIID iid, void **out )
++{
++    return XGameInviteImpl_QueryInterface( &g_x_game_invite, iid, out );
++}
++
++/* ---------------------------------------------------------- XAccessibility */
++
++/* IXAccessibilityImpl (3e241977), shared by IXAccessibilityImpl2 (d722b373).
++ * Slots 3..21 follow the research IDL. Only 3..5 are answered. */
++struct XAccessibilityImplObj;
++
++/* Layout of XClosedCaptionProperties (research xaccessibility.idl). XColor is
++ * a 32-bit ARGB value, enums are 32-bit. */
++struct XAccessibilityClosedCaptionProps
++{
++    UINT32  BackgroundColor;
++    UINT32  FontColor;
++    UINT32  WindowColor;
++    UINT32  FontEdgeAttribute;
++    UINT32  FontStyle;
++    float   FontScale;
++    BOOLEAN Enabled;
++};
++
++struct XAccessibilityImplVtbl
++{
++    HRESULT ( WINAPI *QueryInterface )( XAccessibilityImplObj *, REFIID, void ** ); /* 0 */
++    ULONG   ( WINAPI *AddRef )( XAccessibilityImplObj * );                          /* 1 */
++    ULONG   ( WINAPI *Release )( XAccessibilityImplObj * );                         /* 2 */
++    HRESULT ( WINAPI *XClosedCaptionGetProperties )( XAccessibilityImplObj *, XAccessibilityClosedCaptionProps * ); /* 3 */
++    HRESULT ( WINAPI *XClosedCaptionSetEnabled )( XAccessibilityImplObj *, BOOLEAN );    /* 4 */
++    HRESULT ( WINAPI *XHighContrastGetMode )( XAccessibilityImplObj *, UINT32 * );      /* 5 */
++    ViStubFn unimplemented[ 16 ];                                                       /* 6..21 */
++};
++
++struct XAccessibilityImplObj
++{
++    const XAccessibilityImplVtbl *lpVtbl;
++    std::atomic_long ref{ 1 };
++    BOOLEAN closedCaptionEnabled = FALSE;
++};
++
++static HRESULT WINAPI XAccessibilityImpl_QueryInterface( XAccessibilityImplObj *self, REFIID iid, void **out )
++{
++    static const GUID iid2 = { 0xd722b373, 0x8c4d, 0x4692, { 0x9e, 0x51, 0xd6, 0xad, 0x9b, 0x37, 0xaa, 0x7d } };
++
++    TRACE( "iface %p, iid %s, out %p.\n", self, debugstr_guid( &iid ), out );
++
++    if ( !out ) return E_POINTER;
++    *out = nullptr;
++    if ( IsEqualGUID( iid, IID_IUnknown ) || IsEqualGUID( iid, CLSID_XAccessibilityImpl ) || IsEqualGUID( iid, iid2 ) )
++    {
++        self->ref++;
++        *out = self;
++        return S_OK;
++    }
++    FIXME( "%s not implemented, returning E_NOINTERFACE.\n", debugstr_guid( &iid ) );
++    return E_NOINTERFACE;
++}
++
++static ULONG WINAPI XAccessibilityImpl_AddRef( XAccessibilityImplObj *self )
++{
++    return static_cast<ULONG>( ++self->ref );
++}
++
++static ULONG WINAPI XAccessibilityImpl_Release( XAccessibilityImplObj *self )
++{
++    return static_cast<ULONG>( --self->ref );
++}
++
++static HRESULT WINAPI XAccessibilityImpl_ClosedCaptionGetProperties( XAccessibilityImplObj *self, XAccessibilityClosedCaptionProps *props )
++{
++    TRACE( "iface %p, props %p.\n", self, props );
++    if ( !props ) return E_POINTER;
++
++    /* Captions are off here. Colours are opaque defaults (black, white, black),
++     * the scale is 1.0 and the style and edge attributes are the defaults. */
++    props->BackgroundColor = 0xFF000000;
++    props->FontColor = 0xFFFFFFFF;
++    props->WindowColor = 0xFF000000;
++    props->FontEdgeAttribute = 0;
++    props->FontStyle = 0;
++    props->FontScale = 1.0f;
++    props->Enabled = self->closedCaptionEnabled;
++    return S_OK;
++}
++
++static HRESULT WINAPI XAccessibilityImpl_ClosedCaptionSetEnabled( XAccessibilityImplObj *self, BOOLEAN enabled )
++{
++    TRACE( "iface %p, enabled %d.\n", self, enabled );
++    self->closedCaptionEnabled = enabled ? TRUE : FALSE;
++    return S_OK;
++}
++
++static HRESULT WINAPI XAccessibilityImpl_HighContrastGetMode( XAccessibilityImplObj *self, UINT32 *mode )
++{
++    TRACE( "iface %p, mode %p.\n", self, mode );
++    if ( !mode ) return E_POINTER;
++    *mode = 0; /* XHighContrastMode_Off: this runtime has no high-contrast theme. */
++    return S_OK;
++}
++
++static XAccessibilityImplVtbl xaccessibility_vtbl =
++{
++    XAccessibilityImpl_QueryInterface,
++    XAccessibilityImpl_AddRef,
++    XAccessibilityImpl_Release,
++    XAccessibilityImpl_ClosedCaptionGetProperties,
++    XAccessibilityImpl_ClosedCaptionSetEnabled,
++    XAccessibilityImpl_HighContrastGetMode,
++    { nullptr },
++};
++
++static XAccessibilityImplObj g_x_accessibility = { &xaccessibility_vtbl };
++
++HRESULT XAccessibilityImplQueryInterface( REFIID iid, void **out )
++{
++    static bool filled = false;
++    if ( !filled )
++    {
++        FillStubs<6>( xaccessibility_vtbl.unimplemented, std::make_index_sequence<16>{} );
++        filled = true;
++    }
++    return XAccessibilityImpl_QueryInterface( &g_x_accessibility, iid, out );
++}
+diff --git a/dlls/xgameruntime/GDKComponent/System/XErrorInviteAccessibility.h b/dlls/xgameruntime/GDKComponent/System/XErrorInviteAccessibility.h
+new file mode 100644
+index 0000000..ccc6286
+--- /dev/null
++++ b/dlls/xgameruntime/GDKComponent/System/XErrorInviteAccessibility.h
+@@ -0,0 +1,36 @@
++/*
++ * Xbox Game runtime Library
++ *  GDK Component: XError, XGameInvite and XAccessibility class entry points
++ *
++ * Declares the QueryApiImpl hooks for three classes
++ * the game asks for (XErrorImpl, XGameInviteImpl, XAccessibilityImpl).
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2.1 of the License, or (at your option) any later version.
++ */
++
++#ifndef XERRORINVITEACCESSIBILITY_H
++#define XERRORINVITEACCESSIBILITY_H
++
++#include <windows.h>
++
++/* Class ids from the GDK COM reference and research xerror.idl, xgameinvite.idl, xaccessibility.idl. */
++static const GUID CLSID_XErrorImpl = { 0x8ca467f7, 0x22e8, 0x4096, { 0x84, 0x56, 0xbb, 0x8a, 0xa1, 0x3f, 0x79, 0xd8 } };
++static const GUID CLSID_XGameInviteImpl = { 0x0651aae2, 0x4012, 0x4077, { 0xbf, 0x84, 0x8b, 0x90, 0x97, 0x09, 0x0e, 0x2c } };
++static const GUID CLSID_XAccessibilityImpl = { 0x3e241977, 0x6237, 0x41e9, { 0x85, 0x59, 0x10, 0x2c, 0x2d, 0x99, 0x83, 0xf1 } };
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++HRESULT XErrorImplQueryInterface( REFIID iid, void **out );
++HRESULT XGameInviteImplQueryInterface( REFIID iid, void **out );
++HRESULT XAccessibilityImplQueryInterface( REFIID iid, void **out );
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* XERRORINVITEACCESSIBILITY_H */
+diff --git a/dlls/xgameruntime/Makefile.in b/dlls/xgameruntime/Makefile.in
+index 9e44580..a2c449b 100644
+--- a/dlls/xgameruntime/Makefile.in
++++ b/dlls/xgameruntime/Makefile.in
+@@ -27,6 +27,7 @@ SOURCES = \
+ 	GDKComponent/System/XPackage.cpp \
+ 	GDKComponent/System/XGame.cpp \
+ 	GDKComponent/System/XGameProtocol.cpp \
++	GDKComponent/System/XErrorInviteAccessibility.cpp \
+ 	\
+ 	GDKComponent/Xodus/Structs.cpp \
+ 	GDKComponent/Xodus/IPCLayer.cpp \
+diff --git a/dlls/xgameruntime/main.c b/dlls/xgameruntime/main.c
+index 48b41ae..460027d 100644
+--- a/dlls/xgameruntime/main.c
++++ b/dlls/xgameruntime/main.c
+@@ -22,6 +22,7 @@
+ #include "private.h"
+ #include "GDKComponent/InitInternalGDKC.h"
+ #include "GDKComponent/System/XPackageGame.h"
++#include "GDKComponent/System/XErrorInviteAccessibility.h"
+ 
+ #include "ntstatus.h"
+ 
+@@ -256,6 +257,21 @@ HRESULT WINAPI QueryApiImpl( const GUID *runtimeClassId, REFIID interfaceId, voi
+         /* No protocol activations. */
+         return XGameProtocolImplQueryInterface( interfaceId, out );
+     }
++    else if ( IsEqualGUID( runtimeClassId, &CLSID_XErrorImpl ) )
++    {
++        /* Error callback and options are stored, never fired. */
++        return XErrorImplQueryInterface( interfaceId, out );
++    }
++    else if ( IsEqualGUID( runtimeClassId, &CLSID_XGameInviteImpl ) )
++    {
++        /* Registration returns a token, no invite is delivered. */
++        return XGameInviteImplQueryInterface( interfaceId, out );
++    }
++    else if ( IsEqualGUID( runtimeClassId, &CLSID_XAccessibilityImpl ) )
++    {
++        /* Captions and high contrast report off. */
++        return XAccessibilityImplQueryInterface( interfaceId, out );
++    }
+     else if ( IsEqualGUID( runtimeClassId, &CLSID_XGameRuntimeFeatureImpl ) )
+     {
+         return IXGameRuntimeFeatureImpl_QueryInterface( x_game_runtime_feature, interfaceId, out );
