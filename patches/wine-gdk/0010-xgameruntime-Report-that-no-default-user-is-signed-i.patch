@@ -1,0 +1,183 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:15 +0530
+Subject: [PATCH 10/21] xgameruntime: Report that no default user is signed in.
+
+---
+ .../GDKComponent/System/User/UserImpl.cpp     | 29 ++++++++++-----
+ .../GDKComponent/System/XUser.cpp             | 36 ++++++++++++-------
+ dlls/xgameruntime/main.c                      |  5 +++
+ 3 files changed, 49 insertions(+), 21 deletions(-)
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/User/UserImpl.cpp b/dlls/xgameruntime/GDKComponent/System/User/UserImpl.cpp
+index ee563d6..bd9cb0b 100644
+--- a/dlls/xgameruntime/GDKComponent/System/User/UserImpl.cpp
++++ b/dlls/xgameruntime/GDKComponent/System/User/UserImpl.cpp
+@@ -112,14 +112,26 @@ XUserAddProvider( XAsyncOp op, const XAsyncProviderData *data )
+     switch (op)
+     {
+         case XAsyncOp::Begin:
++#if XODUS_INTEROP
+             hr = xthreading->XAsyncSchedule( data->async, 0 );
+             break;
++#else
++            /* Finish here. XAsyncSchedule hands the block to a
++             * worker and then reads it again, which races with the worker
++             * freeing it (use after free, crash at +0x78 in XAsyncSchedule). */
++            xthreading->XAsyncComplete( data->async, E_GAMEUSER_NO_DEFAULT_USER, 0 );
++            hr = S_OK;
++            break;
++#endif
+ 
+         case XAsyncOp::GetResult:
+             memcpy( data->buffer, &context->user, sizeof(XUserHandle) );
+             break;
+ 
+         case XAsyncOp::DoWork:
++            /* No account is signed in on this machine. The Xodus
++             * MSA path below is compiled out (XODUS_INTEROP 0), so report that. */
++            hr = E_GAMEUSER_NO_DEFAULT_USER;
+ #if XODUS_INTEROP
+             {
+                 if ( static_cast<UINT32>(context->options) & static_cast<UINT32>(XUserAddOptions::AddDefaultUserSilently) ||
+@@ -188,7 +200,8 @@ XUserAddProvider( XAsyncOp op, const XAsyncProviderData *data )
+             break;
+ 
+         case XAsyncOp::Cleanup:
+-            free( context );
++            /* The context came from new, not malloc. */
++            delete context;
+             break;
+ 
+         case XAsyncOp::Cancel:
+@@ -209,24 +222,22 @@ HRESULT XUserAddAsync(
+     XAsyncBlock *async
+ ) {
+     std::unique_ptr<XUserAddContext> context;
+-    IXThreadingImpl *xthreading = nullptr;
+     HRESULT hr;
+ 
+     if ( !async ) 
+         return E_POINTER;
+ 
+     context = std::make_unique<XUserAddContext>();
+-    
+-    hr = QueryApiImpl( &CLSID_XThreadingImpl, IID_IXThreadingImpl, (void **)&xthreading );
+-    if ( FAILED( hr ) ) return hr;
+-
+     context->options = options;
+-    // ownership of context is handed to XUserAddProvider.
+-    //hr = xthreading->XAsyncBegin( async, context.get(), nullptr, __func__, XUserAddProvider );
++
++    /* This used to return S_OK without starting the async
++     * block, so the game waited on it forever. Start it now. */
++    hr = ::XAsyncBegin( async, context.get(), nullptr, __func__, XUserAddProvider );
+     if ( SUCCEEDED( hr ) )
+     {
++        /* Ownership of context is handed to XUserAddProvider (Cleanup). */
+         context.release();
+     }
+ 
+     return hr;
+-}
+\ No newline at end of file
++}
+diff --git a/dlls/xgameruntime/GDKComponent/System/XUser.cpp b/dlls/xgameruntime/GDKComponent/System/XUser.cpp
+index 7627125..77d7679 100644
+--- a/dlls/xgameruntime/GDKComponent/System/XUser.cpp
++++ b/dlls/xgameruntime/GDKComponent/System/XUser.cpp
+@@ -26,6 +26,9 @@
+ 
+ WINE_DEFAULT_DEBUG_CHANNEL(gdkc);
+ 
++/* Token source for XUserRegisterForChangeEvent. */
++static std::atomic<UINT64> change_event_tokens{ 0 };
++
+ class XUserImpl : 
+     public IXUserImpl6
+ {
+@@ -152,14 +155,16 @@ public:
+ 
+     HRESULT WINAPI XUserAddAsync( XUserAddOptions options, XAsyncBlock *async ) override
+     {
+-        FIXME( "options %d, async %p stub!\n", (int)options, async );
+-        return E_NOTIMPL;
++        /* Start the add in UserImpl.cpp, which reports that no default user is signed in. */
++        TRACE( "options %d, async %p.\n", (int)options, async );
++        return ::XUserAddAsync( options, async );
+     }
+ 
+     HRESULT WINAPI XUserAddResult( XAsyncBlock *async, XUserHandle *newUser ) override
+     {
+-        FIXME( "async %p, newUser %p stub!\n", async, newUser );
+-        return E_NOTIMPL;
++        /* Return the outcome of the XUserAddAsync block. */
++        TRACE( "async %p, newUser %p.\n", async, newUser );
++        return ::XAsyncGetResult( async, nullptr, sizeof(XUserHandle), newUser, nullptr );
+     }
+ 
+     HRESULT WINAPI XUserGetLocalId( XUserHandle user, XUserLocalId *userLocalId ) override
+@@ -170,8 +175,10 @@ public:
+ 
+     HRESULT WINAPI XUserFindUserByLocalId( XUserLocalId userLocalId, XUserHandle *handle ) override
+     {
+-        FIXME( "userLocalId %p, handle %p stub!\n", &userLocalId, handle );
+-        return E_NOTIMPL;
++        /* No user is signed in, so no user can be found. */
++        TRACE( "userLocalId %p, handle %p.\n", &userLocalId, handle );
++        if ( handle ) *handle = nullptr;
++        return E_GAMEUSER_USER_NOT_FOUND;
+     }
+ 
+     HRESULT WINAPI XUserGetId( XUserHandle user, UINT64 *userId ) override
+@@ -182,8 +189,10 @@ public:
+ 
+     HRESULT WINAPI XUserFindUserById( UINT64 userId, XUserHandle *handle ) override
+     {
+-        FIXME( "userId %llu, handle %p stub!\n", userId, handle );
+-        return E_NOTIMPL;
++        /* No user is signed in, so no user can be found. */
++        TRACE( "userId %llu, handle %p.\n", userId, handle );
++        if ( handle ) *handle = nullptr;
++        return E_GAMEUSER_USER_NOT_FOUND;
+     }
+ 
+     HRESULT WINAPI XUserGetIsGuest( XUserHandle user, BOOLEAN *isGuest ) override
+@@ -308,14 +317,17 @@ public:
+ 
+     HRESULT WINAPI XUserRegisterForChangeEvent( XTaskQueueHandle queue, void *context, XUserChangeEventCallback *callback, XTaskQueueRegistrationToken *token ) override
+     {
+-        FIXME( "queue %p, context %p, callback %p, token %p stub!\n", queue, context, callback, token );
+-        return E_NOTIMPL;
++        /* Registration succeeds. No user can sign in or out here, so the callback is never called. */
++        TRACE( "queue %p, context %p, callback %p, token %p.\n", queue, context, callback, token );
++        if ( !callback || !token ) return E_POINTER;
++        token->token = ++change_event_tokens;
++        return S_OK;
+     }
+ 
+     BOOLEAN WINAPI XUserUnregisterForChangeEvent( XTaskQueueRegistrationToken token, BOOLEAN wait ) override
+     {
+-        FIXME( "token %p, wait %d stub!\n", &token, wait );
+-        return FALSE;
++        TRACE( "token %llu, wait %d.\n", (unsigned long long)token.token, wait );
++        return token.token != 0;
+     }
+ 
+     HRESULT WINAPI XUserGetSignOutDeferral( XUserSignOutDeferralHandle *deferral ) override
+diff --git a/dlls/xgameruntime/main.c b/dlls/xgameruntime/main.c
+index dc5096c..cbdc654 100644
+--- a/dlls/xgameruntime/main.c
++++ b/dlls/xgameruntime/main.c
+@@ -235,6 +235,11 @@ HRESULT WINAPI QueryApiImpl( const GUID *runtimeClassId, REFIID interfaceId, voi
+     {
+         return IXSystemImpl_QueryInterface( x_system, interfaceId, out );
+     }
++    else if ( IsEqualGUID( runtimeClassId, &CLSID_XUserImpl ) )
++    {
++        /* XUser reports that no user is signed in. */
++        return IXUserImpl_QueryInterface( x_user, interfaceId, out );
++    }
+     else if ( IsEqualGUID( runtimeClassId, &CLSID_XGameRuntimeFeatureImpl ) )
+     {
+         return IXGameRuntimeFeatureImpl_QueryInterface( x_game_runtime_feature, interfaceId, out );
