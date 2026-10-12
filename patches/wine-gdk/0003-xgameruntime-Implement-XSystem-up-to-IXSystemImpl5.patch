@@ -1,0 +1,67 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:12 +0530
+Subject: [PATCH 03/21] xgameruntime: Implement XSystem up to IXSystemImpl5.
+
+---
+ .../GDKComponent/System/XSystem.cpp           | 30 +++++++++++++++++--
+ 1 file changed, 27 insertions(+), 3 deletions(-)
+
+diff --git a/dlls/xgameruntime/GDKComponent/System/XSystem.cpp b/dlls/xgameruntime/GDKComponent/System/XSystem.cpp
+index 293da4a..0752611 100644
+--- a/dlls/xgameruntime/GDKComponent/System/XSystem.cpp
++++ b/dlls/xgameruntime/GDKComponent/System/XSystem.cpp
+@@ -30,8 +30,10 @@ const INT32 XSystemConsoleIdBytes = 39;
+ const INT32 XSystemXboxLiveSandboxIdMaxBytes = 16;
+ const INT32 XSystemAppSpecificDeviceIdBytes = 45;
+ 
++/* Implement up to IXSystemImpl5, which Minecraft Bedrock
++ * 1.26 requests as IXSystemImpl4. */
+ class XSystemImpl : 
+-    public IXSystemImpl
++    public IXSystemImpl5
+ {
+ public:
+     HRESULT WINAPI QueryInterface( REFIID iid, void **out )
+@@ -44,10 +46,14 @@ public:
+         if ( iid == __uuidof( IUnknown ) ||
+              iid == __uuidof( IInspectable ) ||
+              iid == __uuidof( IAgileObject ) ||
+-             iid == __uuidof( IXSystemImpl ) )
++             iid == __uuidof( IXSystemImpl ) ||
++             iid == __uuidof( IXSystemImpl2 ) ||
++             iid == __uuidof( IXSystemImpl3 ) ||
++             iid == __uuidof( IXSystemImpl4 ) ||
++             iid == __uuidof( IXSystemImpl5 ) )
+         {
+             AddRef();
+-            *out = static_cast<IXSystemImpl *>(this);
++            *out = static_cast<IXSystemImpl5 *>(this);
+             return S_OK;
+         }
+ 
+@@ -121,6 +127,24 @@ public:
+         return E_NOTIMPL;
+     }
+ 
++    /* Handle tracking is a debugging aid. Accept the callback and never call it. */
++    HRESULT WINAPI XSystemHandleTrack( XSystemHandleCallback callback, void *context ) override
++    {
++        FIXME( "callback %p, context %p stub!\n", callback, context );
++        return S_OK;
++    }
++
++    BOOLEAN WINAPI XSystemIsHandleValid( XSystemHandle handle ) override
++    {
++        TRACE( "handle %p.\n", handle );
++        return handle != nullptr;
++    }
++
++    void WINAPI XSystemAllowFullDownloadBandwidth( BOOLEAN enable ) override
++    {
++        TRACE( "enable %d.\n", enable );
++    }
++
+ private:
+     std::atomic_long ref{ 1 };
+ };
