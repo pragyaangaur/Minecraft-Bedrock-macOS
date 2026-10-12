@@ -7,6 +7,7 @@
 //   winput click <xf> <yf>         SetCursorPos + SendInput left click at client fraction xf, yf (0..1)
 //   winput pmclick <xf> <yf>       PostMessage WM_LBUTTONDOWN/UP with client coords (no cursor move)
 //   winput key <vk> [vk2 ...]      SendInput down+up for each virtual key code (decimal or 0x..)
+//   winput hold <ms> <vk> [vk2 ...] press all keys together, hold for ms, release (walk, sprint, jump)
 // Fractions are decimals such as 0.77. Window class name: "Bedrock".
 
 typedef unsigned short WCHAR;
@@ -180,7 +181,7 @@ static int run(WCHAR *cmdline) {
   p = next_token(p, cmd, sizeof cmd);
   if (!p) return 2;
   p = next_token(p, cmd, sizeof cmd);
-  if (!p || !cmd[0]) { out("usage: winput info | click x y | pmclick x y | key vk...\n"); return 2; }
+  if (!p || !cmd[0]) { out("usage: winput info | click x y | pmclick x y | key vk... | hold ms vk...\n"); return 2; }
 
   HWND h = find_game();
   if (!h) return 1;
@@ -209,6 +210,26 @@ static int run(WCHAR *cmdline) {
       Sleep(120);
       out("key "); out_int(vk); out(" sent\n");
     }
+    return 0;
+  }
+
+  if (cmd[0] == 'h') {  // hold <ms> <vk...>
+    WORD vks[16];
+    int n = 0;
+    p = next_token(p, a1, sizeof a1);
+    if (!p) return 2;
+    long ms = parse_num(a1);
+    while (n < 16) {
+      p = next_token(p, a2, sizeof a2);
+      if (!p || !a2[0]) break;
+      vks[n++] = (WORD)parse_num(a2);
+    }
+    SetForegroundWindow(h);
+    Sleep(200);
+    for (int i = 0; i < n; i++) { key(vks[i], 0); Sleep(40); }
+    Sleep((DWORD)ms);
+    for (int i = n - 1; i >= 0; i--) key(vks[i], 1);
+    out("held "); out_int(n); out(" keys for "); out_int(ms); out(" ms\n");
     return 0;
   }
 
