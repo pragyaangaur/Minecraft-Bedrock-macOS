@@ -1,17 +1,18 @@
 #!/bin/zsh
 # Run the game once under WineGDK and write Wine's output to a log in out/.
 #
-# Usage: [PREFIX=dir] [TAG=name] [EXE=file] [XCURL=hang] [AUDIO=off]
+# Usage: [PREFIX=dir] [TAG=name] [EXE=file] [XCURL=hang] [AUDIO=off] [FMOD=orig]
 #        tools/run_wine.sh [WINEDEBUG channels] [seconds before the game is stopped]
 #
 # PREFIX picks another Wine prefix (the default is prefix/). TAG is added to
 # the log name. EXE runs another rebuilt executable, such as the trace build.
 # XCURL=hang uses the offline XCurl whose requests never complete. AUDIO=off
 # disables Wine's CoreAudio driver, so the game sees no sound device.
+# FMOD=orig uses the game's own fmod.dll instead of the guarded copy.
 #
 # drive_c/Minecraft is rebuilt on each run from symlinks into game/, with the
-# rebuilt executable from build/game and the stand-in DLLs
-# from build/stubs placed beside them so that they win over the originals.
+# rebuilt executable and the guarded fmod.dll from build/game and the stand-in
+# DLLs from build/stubs placed beside them so that they win over the originals.
 set -eu
 source "${0:A:h}/../scripts/common.sh"
 
@@ -28,11 +29,16 @@ system32="$WINEPREFIX/drive_c/windows/system32"
 rm -rf "$run" && mkdir -p "$run"
 for f in "$GAME"/*(N); do
   case "${f:t}" in
-    Minecraft.Windows.exe|XCurl.dll|dumps|.DS_Store) ;;
+    Minecraft.Windows.exe|fmod.dll|XCurl.dll|dumps|.DS_Store) ;;
     *) ln -s "$f" "$run/${f:t}" ;;
   esac
 done
 ln -s "${EXE:-$GAME_BUILD/Minecraft.Windows.exe}" "$run/Minecraft.Windows.exe"
+if [[ ${FMOD:-guarded} == orig ]]; then
+  ln -s "$GAME/fmod.dll" "$run/fmod.dll"
+else
+  ln -s "$GAME_BUILD/fmod.dll" "$run/fmod.dll"
+fi
 for d in "$BUILD"/stubs/*.dll(N); do ln -sf "$d" "$run/${d:t}"; done
 [[ ${XCURL:-} == hang ]] && ln -sf "$BUILD/stubs/hang/XCurl.dll" "$run/XCurl.dll"
 
