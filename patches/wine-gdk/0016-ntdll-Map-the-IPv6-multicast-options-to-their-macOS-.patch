@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Mon, 12 Oct 2026 13:06:19 +0530
+Subject: [PATCH 16/21] ntdll: Map the IPv6 multicast options to their macOS
+ names.
+
+---
+ dlls/ntdll/unix/socket.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/dlls/ntdll/unix/socket.c b/dlls/ntdll/unix/socket.c
+index 29c3644..d6f6f47 100644
+--- a/dlls/ntdll/unix/socket.c
++++ b/dlls/ntdll/unix/socket.c
+@@ -69,6 +69,15 @@
+ 
+ #include <sys/un.h>
+ 
++/* macOS spells the IPv6 multicast options IPV6_JOIN_GROUP and
++   IPV6_LEAVE_GROUP, so Wine rejected IPV6_ADD_MEMBERSHIP with STATUS_NOT_SUPPORTED. */
++#if !defined(IPV6_ADD_MEMBERSHIP) && defined(IPV6_JOIN_GROUP)
++# define IPV6_ADD_MEMBERSHIP IPV6_JOIN_GROUP
++#endif
++#if !defined(IPV6_DROP_MEMBERSHIP) && defined(IPV6_LEAVE_GROUP)
++# define IPV6_DROP_MEMBERSHIP IPV6_LEAVE_GROUP
++#endif
++
+ #include "ntstatus.h"
+ #include "windef.h"
+ #include "winioctl.h"
