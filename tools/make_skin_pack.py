@@ -77,6 +77,9 @@ def write_pack(path, name, uuid, module_uuid, entries):
                "header": {"name": name, "uuid": uuid, "version": [1, 0, 0]},
                "modules": [{"type": "skin_pack", "uuid": module_uuid, "version": [1, 0, 0]}]},
               open(os.path.join(path, "manifest.json"), "w"), indent=2)
+    open(os.path.join(path, "STAND-IN.txt"), "w").write(
+        "Written by tools/make_skin_pack.py because the game copy had no data/skin_packs.\n"
+        "Replace this folder with the one from the Windows install when you can.\n")
     print("wrote", path, len(entries), "skins")
 
 
