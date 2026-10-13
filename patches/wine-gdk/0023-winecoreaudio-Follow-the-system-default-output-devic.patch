@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Tue, 13 Oct 2026 10:39:15 +0530
+Subject: [PATCH 23/23] winecoreaudio: Follow the system default output device.
+
+---
+ dlls/winecoreaudio.drv/coreaudio.c | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/dlls/winecoreaudio.drv/coreaudio.c b/dlls/winecoreaudio.drv/coreaudio.c
+index 43a9e58..d3f42a0 100644
+--- a/dlls/winecoreaudio.drv/coreaudio.c
++++ b/dlls/winecoreaudio.drv/coreaudio.c
+@@ -477,6 +477,21 @@ static OSStatus ca_capture_cb(void *user, AudioUnitRenderActionFlags *flags,
+     return noErr;
+ }
+ 
++static AudioDeviceID get_default_output_device(void)
++{
++    AudioObjectPropertyAddress addr = {
++        kAudioHardwarePropertyDefaultOutputDevice,
++        kAudioObjectPropertyScopeGlobal,
++        kAudioObjectPropertyElementMain
++    };
++    AudioDeviceID id = kAudioObjectUnknown;
++    UInt32 size = sizeof(id);
++
++    if(AudioObjectGetPropertyData(kAudioObjectSystemObject, &addr, 0, NULL, &size, &id) != noErr)
++        return kAudioObjectUnknown;
++    return id;
++}
++
+ static AudioComponentInstance get_audiounit(EDataFlow dataflow, AudioDeviceID adevid)
+ {
+     AudioComponentInstance unit;
+@@ -489,6 +504,12 @@ static AudioComponentInstance get_audiounit(EDataFlow dataflow, AudioDeviceID ad
+     desc.componentSubType = kAudioUnitSubType_HALOutput;
+     desc.componentManufacturer = kAudioUnitManufacturer_Apple;
+ 
++    /* A stream on the default output device uses Apple's default output unit,
++     * which follows the system default. Sound then moves to earphones or
++     * speakers when they are plugged in or out while the stream is open. */
++    if(dataflow == eRender && adevid == get_default_output_device())
++        desc.componentSubType = kAudioUnitSubType_DefaultOutput;
++
+     if(!(comp = AudioComponentFindNext(NULL, &desc))){
+         WARN("AudioComponentFindNext failed\n");
+         return NULL;
+@@ -522,6 +543,9 @@ static AudioComponentInstance get_audiounit(EDataFlow dataflow, AudioDeviceID ad
+         }
+     }
+ 
++    if(desc.componentSubType == kAudioUnitSubType_DefaultOutput)
++        return unit;
++
+     sc = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+             kAudioUnitScope_Global, 0, &adevid, sizeof(adevid));
+     if(sc != noErr){
+-- 
+2.54.0 (Apple Git-157)
+
