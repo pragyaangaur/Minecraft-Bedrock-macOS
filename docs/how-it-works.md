@@ -32,6 +32,10 @@ Other runtime patches do the following.
 
 The game tries Direct3D 12 first. WineGDK is built without Vulkan, so that fails and the game falls back to Direct3D 11, which DXMT implements on Metal. DXMT reports feature level 11_1 on Apple Silicon, and the game uses its `Direct3D_SM50` shaders. Two small patches in `patches/dxmt` make DXMT v0.80 build with current Xcode and Metal tools.
 
+Wine's Mac driver gives DXMT a Metal view inside the window, but it did not resize that view when the window changed size. In fullscreen the picture stayed at the old window size and the rest of the screen was white. Patch 0022 resizes the view whenever the window moves or changes size. The game also has its own problem when it starts in fullscreen, because it keeps drawing at the size of the window it first created. The picture is then stretched and clicks land below the cursor. The launcher therefore always starts the game in a window, and pressing F11 in the game switches to fullscreen with the right size.
+
+Wine used to bind the game's sound to whichever output device was the default when the game opened it. Patch 0023 uses Apple's default output unit for that device instead, so the sound follows the Mac when earphones are plugged in or taken out while the game runs.
+
 The game picks a render distance of 41 chunks on a Mac with 16 GB of memory. At that distance an M4 is limited by the GPU to about 26 frames per second. The setup starts new installs at 12 chunks, which runs at about 105 frames per second.
 
 ## Network

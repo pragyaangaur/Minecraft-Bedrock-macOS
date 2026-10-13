@@ -45,6 +45,7 @@ You need a Mac with Apple silicon and a copy of Minecraft for Windows version 1.
 
 - Everything online is unavailable, including signing in, Realms, the Marketplace and multiplayer servers.
 - The game pauses when its window loses focus, as it does on Windows.
+- The game always starts in a window. Press F11 in the game for fullscreen.
 - Only version 1.26.52 of the game has been tested.
 
 ## How it was made
