@@ -52,3 +52,19 @@ x86() { arch -x86_64 /usr/bin/env PATH="$BREW/opt/bison/bin:$BREW/opt/flex/bin:$
 
 wine_cmd() { WINEPREFIX="$WINE_PREFIX_DIR" WINEDEBUG=-all arch -x86_64 "$WINE_DIR/bin/wine" "$@"; }
 wineserver_cmd() { WINEPREFIX="$WINE_PREFIX_DIR" arch -x86_64 "$WINE_DIR/bin/wineserver" "$@"; }
+
+# Autoconf, Wine's configure and pkg-config break on paths that contain
+# spaces. The build scripts call this to work through a symlink in the user's
+# cache folder whose path has none. The symlink stays, because the build
+# folders and the .pc files record its path.
+use_build_alias() {
+  [[ $BUILD == *' '* ]] || return 0
+  local alias="$HOME/Library/Caches/minecraft-bedrock-macos/build-$(print -rn -- "$BUILD" | md5 -q | cut -c1-12)"
+  [[ $alias != *' '* ]] || die "the build path and your home folder both contain spaces. Move the repository to a path without spaces."
+  mkdir -p "$BUILD" "${alias:h}"
+  [[ -L $alias && $(readlink "$alias") == "$BUILD" ]] || ln -sfn "$BUILD" "$alias"
+  BUILD="$alias"
+  GAME_BUILD="$BUILD/game"
+  [[ -n ${MCB_WINE:-} ]] || WINE_DIR="$BUILD/wine"
+  [[ -n ${MCB_STUBS:-} ]] || STUBS_DIR="$BUILD/stubs"
+}

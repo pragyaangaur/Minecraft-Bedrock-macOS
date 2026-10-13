@@ -4,6 +4,7 @@
 # Apple Silicon only ships arm64 builds, which an x86_64 Wine cannot load.
 set -eu
 source "${0:A:h}/common.sh"
+use_build_alias
 
 DEPS_PREFIX="$BUILD/deps"
 SRC="$BUILD/deps-src"

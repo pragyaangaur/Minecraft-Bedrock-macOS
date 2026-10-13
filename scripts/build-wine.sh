@@ -5,6 +5,7 @@
 # version of Minecraft Bedrock needs.
 set -eu
 source "${0:A:h}/common.sh"
+use_build_alias
 
 SRC="$BUILD/src/wine-gdk"
 OBJ="$BUILD/wine-build"
@@ -38,6 +39,8 @@ if [[ ! -f Makefile ]]; then
     CC="clang -arch x86_64" CXX="clang++ -arch x86_64" \
     CFLAGS="-g -O2 -I$DEPS_PREFIX/include" LDFLAGS="-L$DEPS_PREFIX/lib -Wl,-rpath,@loader_path/../.." \
     PKG_CONFIG_PATH="$DEPS_PREFIX/lib/pkgconfig" \
+    FREETYPE_CFLAGS="-I$DEPS_PREFIX/include/freetype2" FREETYPE_LIBS="-L$DEPS_PREFIX/lib -lfreetype" \
+    GNUTLS_CFLAGS="-I$DEPS_PREFIX/include" GNUTLS_LIBS="-L$DEPS_PREFIX/lib -lgnutls" \
     --without-gstreamer --without-sdl --without-cups --without-sane --without-krb5 \
     --without-netapi --without-pcap --without-usb --without-v4l2 --without-capi \
     --without-gphoto --without-x --without-wayland --without-pulse --without-alsa \

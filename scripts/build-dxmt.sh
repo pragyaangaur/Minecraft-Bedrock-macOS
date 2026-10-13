@@ -4,6 +4,7 @@
 # Direct3D 11 to Metal, so the game renders through the Mac's GPU.
 set -eu
 source "${0:A:h}/common.sh"
+use_build_alias
 
 SRC="$BUILD/src/dxmt"
 LLVM_SRC="$SRC/toolchains/llvm-project"
