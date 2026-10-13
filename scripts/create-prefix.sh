@@ -20,6 +20,9 @@ mkdir -p "$games/minecraftpe"
 # Offline there is no gamertag, so the game would use an untranslated
 # character name. A 12 chunk render distance keeps the frame rate near 100;
 # the game picks 41 on a 16 GB Mac. Both can be changed in the game later.
+# The game always starts in a window. When it starts in fullscreen it keeps
+# drawing at the window size, so the picture is stretched and clicks land
+# below the cursor. Pressing F11 in the game switches to fullscreen correctly.
 "$PYTHON" -I "$ROOT/tools/options.py" "$games/minecraftpe/options.txt" \
-  "mp_username=${PLAYER_NAME:-$USER}" gfx_viewdistance=192
+  "mp_username=${PLAYER_NAME:-$USER}" gfx_viewdistance=192 gfx_fullscreen:=0
 say "prefix ready in $WINE_PREFIX_DIR"
