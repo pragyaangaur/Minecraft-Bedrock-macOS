@@ -3,7 +3,7 @@
 // console program, built by stubs/build.sh with the import libraries from stubs/lib.
 //
 // Usage (run inside the Wine prefix):
-//   winput info                    print the client size and origin of the "Bedrock" window
+//   winput info                    print the client size and origin of the "Bedrock" window and the cursor
 //   winput click <xf> <yf>         SetCursorPos + SendInput left click at client fraction xf, yf (0..1)
 //   winput pmclick <xf> <yf>       PostMessage WM_LBUTTONDOWN/UP with client coords (no cursor move)
 //   winput key <vk> [vk2 ...]      SendInput down+up for each virtual key code (decimal or 0x..)
@@ -48,6 +48,7 @@ __declspec(dllimport) BOOL __stdcall SetForegroundWindow(HWND);
 __declspec(dllimport) BOOL __stdcall GetClientRect(HWND, RECT *);
 __declspec(dllimport) BOOL __stdcall ClientToScreen(HWND, POINT *);
 __declspec(dllimport) BOOL __stdcall SetCursorPos(int, int);
+__declspec(dllimport) BOOL __stdcall GetCursorPos(POINT *);
 __declspec(dllimport) UINT __stdcall SendInput(UINT, INPUT *, int);
 __declspec(dllimport) BOOL __stdcall PostMessageW(HWND, UINT, WPARAM, LPARAM);
 
@@ -202,7 +203,10 @@ static int run(WCHAR *cmdline) {
     ClientToScreen(h, &origin);
     out("client w="); out_int(r.right - r.left);
     out(" h="); out_int(r.bottom - r.top);
-    out(" origin="); out_int(origin.x); out(","); out_int(origin.y); out("\n");
+    out(" origin="); out_int(origin.x); out(","); out_int(origin.y);
+    POINT cursor;
+    GetCursorPos(&cursor);
+    out(" cursor="); out_int(cursor.x); out(","); out_int(cursor.y); out("\n");
     return 0;
   }
 
