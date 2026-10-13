@@ -1,0 +1,50 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pragyaan Gaur <pragyaangaur12@gmail.com>
+Date: Tue, 13 Oct 2026 10:39:15 +0530
+Subject: [PATCH 22/23] winemac: Resize the views of D3DMetal and DXMT client
+ surfaces.
+
+---
+ dlls/winemac.drv/window.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/dlls/winemac.drv/window.c b/dlls/winemac.drv/window.c
+index 182c469..0e44be3 100644
+--- a/dlls/winemac.drv/window.c
++++ b/dlls/winemac.drv/window.c
+@@ -1697,6 +1697,32 @@ void macdrv_WindowPosChanged(HWND hwnd, HWND insert_after, HWND owner_hint, UINT
+     }
+ 
+ done:
++    /* The client surfaces made for D3DMetal and DXMT are not in win32u's list,
++     * so win32u never resizes their views. Update them here, after the win data
++     * is released, because updating takes win32u's surface lock first. */
++    if (data->d3dmetal_client_surfaces && CFArrayGetCount(data->d3dmetal_client_surfaces))
++    {
++        CFIndex i, count = CFArrayGetCount(data->d3dmetal_client_surfaces);
++        struct client_surface **surfaces = malloc(count * sizeof(*surfaces));
++
++        if (surfaces)
++        {
++            for (i = 0; i < count; i++)
++            {
++                surfaces[i] = (struct client_surface *)CFArrayGetValueAtIndex(data->d3dmetal_client_surfaces, i);
++                client_surface_add_ref(surfaces[i]);
++            }
++            release_win_data(data);
++
++            for (i = 0; i < count; i++)
++            {
++                client_surface_update(surfaces[i]);
++                client_surface_release(surfaces[i]);
++            }
++            free(surfaces);
++            return;
++        }
++    }
+     release_win_data(data);
+ }
+ 
+-- 
+2.54.0 (Apple Git-157)
+
